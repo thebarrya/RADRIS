@@ -1,0 +1,129 @@
+version: '3.8'
+
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:15
+    container_name: radris-postgres
+    environment:
+      POSTGRES_DB: radris
+      POSTGRES_USER: radris
+      POSTGRES_PASSWORD: radris123
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./scripts/init.sql:/docker-entrypoint-initdb.d/init.sql
+    networks:
+      - radris-network
+
+  # Redis for caching and queues
+  redis:
+    image: redis:7-alpine
+    container_name: radris-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - radris-network
+
+  # Orthanc PACS
+  orthanc:
+    image: orthancteam/orthanc:24.8.1
+    container_name: radris-orthanc
+    environment:
+      ORTHANC__NAME: "RADRIS PACS"
+      ORTHANC__DICOM_AET: "RADRIS"
+      ORTHANC__DICOM_PORT: 4242
+      ORTHANC__HTTP_PORT: 8042
+      ORTHANC__DICOM_SERVER_ENABLED: "true"
+      ORTHANC__DICOM_WEB_ENABLED: "true"
+      ORTHANC__POSTGRESQL_ENABLED: "true"
+      ORTHANC__POSTGRESQL_HOST: postgres
+      ORTHANC__POSTGRESQL_PORT: 5432
+      ORTHANC__POSTGRESQL_DATABASE: orthanc
+      ORTHANC__POSTGRESQL_USERNAME: radris
+      ORTHANC__POSTGRESQL_PASSWORD: radris123
+    ports:
+      - "8042:8042"  # HTTP API
+      - "4242:4242"  # DICOM port
+    depends_on:
+      - postgres
+    volumes:
+      - orthanc_data:/var/lib/orthanc/db
+      - ./config/orthanc.json:/etc/orthanc/orthanc.json:ro
+    networks:
+      - radris-network
+
+  # Backend API
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.dev
+    container_name: radris-backend
+    environment:
+      NODE_ENV: development
+      DATABASE_URL: "postgresql://radris:radris123@postgres:5432/radris"
+      REDIS_URL: "redis://redis:6379"
+      ORTHANC_URL: "http://orthanc:8042"
+      JWT_SECRET: "your-super-secret-jwt-key-change-in-production"
+    ports:
+      - "3001:3001"
+      - "3002:3002"
+    volumes:
+      - ./backend:/app
+      - /app/node_modules
+    depends_on:
+      - postgres
+      - redis
+      - orthanc
+    networks:
+      - radris-network
+
+  # Frontend
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.dev
+    container_name: radris-frontend
+    environment:
+      NEXT_PUBLIC_API_URL: "http://localhost:3001/api"
+      INTERNAL_API_URL: "http://backend:3001/api"
+      NEXT_PUBLIC_ORTHANC_URL: "http://localhost:8042"
+      NEXTAUTH_URL: "http://localhost:3000"
+      NEXTAUTH_SECRET: "your-super-secret-nextauth-key-change-in-production"
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+      - /app/.next
+    depends_on:
+      - backend
+    networks:
+      - radris-network
+
+  # OHIF Viewer
+  ohif-viewer:
+    image: ohif/viewer:latest
+    container_name: radris-ohif
+    environment:
+      - APP_CONFIG=/usr/share/nginx/html/app-config.js
+    ports:
+      - "3005:80"
+    volumes:
+      - ./config/ohif-config.js:/usr/share/nginx/html/app-config.js:ro
+    depends_on:
+      - orthanc
+    networks:
+      - radris-network
+
+volumes:
+  postgres_data:
+  redis_data:
+  orthanc_data:
+
+networks:
+  radris-network:
+    driver: bridge

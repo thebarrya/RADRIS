@@ -1,0 +1,83 @@
+{
+  "Name" : "RADRIS PACS",
+  "DicomAet" : "RADRIS",
+  "DicomCheckCalledAet" : false,
+  "DicomPort" : 4242,
+  "DicomServerEnabled" : true,
+  "DicomAlwaysAllowEcho" : true,
+  "DicomAlwaysAllowFind" : true,
+  "DicomAlwaysAllowMove" : true,
+  "DicomAlwaysAllowStore" : true,
+  
+  "HttpPort" : 8042,
+  "HttpCompressionEnabled" : true,
+  "HttpRequestTimeout" : 30,
+  "HttpHeaders" : {
+    "Access-Control-Allow-Origin" : "*",
+    "Access-Control-Allow-Methods" : "GET, POST, PUT, DELETE, OPTIONS",
+    "Access-Control-Allow-Headers" : "Content-Type, Authorization, X-Requested-With"
+  },
+  
+  "PostgreSQL" : {
+    "EnableIndex" : true,
+    "EnableStorage" : true,
+    "Host" : "postgres",
+    "Port" : 5432,
+    "Database" : "orthanc",
+    "Username" : "radris",
+    "Password" : "radris123"
+  },
+
+  "Plugins" : [
+    "/usr/share/orthanc/plugins",
+    "/usr/local/share/orthanc/plugins"
+  ],
+
+  "DicomWeb" : {
+    "Enable" : true,
+    "Root" : "/dicom-web/",
+    "EnableWado" : true,
+    "WadoRoot" : "/wado",
+    "Ssl" : false,
+    "StudiesMetadata" : "MainDicomTags",
+    "SeriesMetadata" : "MainDicomTags"
+  },
+
+  "WebViewer" : {
+    "CachePath" : "/var/lib/orthanc/cache"
+  },
+
+  "OHIF" : {
+    "RouterBasename" : "/ohif/",
+    "DataSource" : "dicom-web"
+  },
+  
+  "StoneWebViewer" : {
+    "Enable" : true
+  },
+
+  "RegisteredUsers" : {
+    "radris" : "radris123"
+  },
+
+  "RemoteAccessAllowed" : true,
+  "AuthenticationEnabled" : false,
+  "SslEnabled" : false,
+  
+  "StorageCompression" : false,
+  "MaximumStorageSize" : 0,
+  "MaximumPatientCount" : 0,
+
+  "LuaScripts" : [],
+  "Worklists" : {
+    "Enable" : true,
+    "Database" : "/var/lib/orthanc/worklists"
+  },
+
+  "DefaultEncoding" : "Latin1",
+  "DeidentifyLogs" : true,
+  "LogExportedResources" : false,
+  
+  "ConcurrentJobs" : 2,
+  "HttpsCACertificates" : "/etc/ssl/certs/ca-certificates.crt"
+}

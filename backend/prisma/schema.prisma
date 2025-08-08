@@ -1,0 +1,194 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  firstName String
+  lastName  String
+  role      UserRole @default(TECHNICIAN)
+  password  String
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  createdPatients   Patient[]     @relation("CreatedByUser")
+  referredExams     Examination[] @relation("ReferrerUser")
+  assignedExams     Examination[] @relation("AssignedRadiologist")
+  createdExams      Examination[] @relation("CreatedByUser")
+  validatedReports  Report[]      @relation("ValidatedByUser")
+  createdReports    Report[]      @relation("CreatedByUser")
+
+  @@map("users")
+}
+
+model Patient {
+  id               String    @id @default(cuid())
+  firstName        String
+  lastName         String
+  birthDate        DateTime
+  gender           Gender
+  phoneNumber      String?
+  email            String?
+  address          String?
+  city             String?
+  zipCode          String?
+  socialSecurity   String?   @unique
+  insuranceNumber  String?
+  emergencyContact String?
+  allergies        String[]  @default([])
+  medicalHistory   String[]  @default([])
+  warnings         String[]  @default([])
+  active           Boolean   @default(true)
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+  createdById      String
+  
+  // Relations
+  createdBy     User          @relation("CreatedByUser", fields: [createdById], references: [id])
+  examinations  Examination[]
+
+  @@map("patients")
+}
+
+model Examination {
+  id                String            @id @default(cuid())
+  accessionNumber   String            @unique
+  scheduledDate     DateTime
+  accessionTime     DateTime?
+  acquisitionTime   DateTime?
+  completedAt       DateTime?
+  status            ExaminationStatus @default(SCHEDULED)
+  priority          Priority          @default(NORMAL)
+  modality          Modality
+  examType          String
+  bodyPart          String
+  procedure         String
+  contrast          Boolean           @default(false)
+  clinicalInfo      String?
+  preparation       String?
+  comments          String[]          @default([])
+  studyInstanceUID  String?           @unique
+  imagesAvailable   Boolean           @default(false)
+  locked            Boolean           @default(false)
+  lockReason        String?
+  patientId         String
+  referrerId        String?
+  assignedToId      String?
+  createdById       String
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+
+  // Relations
+  patient      Patient  @relation(fields: [patientId], references: [id])
+  referrer     User?    @relation("ReferrerUser", fields: [referrerId], references: [id])
+  assignedTo   User?    @relation("AssignedRadiologist", fields: [assignedToId], references: [id])
+  createdBy    User     @relation("CreatedByUser", fields: [createdById], references: [id])
+  reports      Report[]
+
+  @@map("examinations")
+}
+
+model Report {
+  id                String       @id @default(cuid())
+  status            ReportStatus @default(DRAFT)
+  templateId        String?
+  indication        String?
+  technique         String?
+  findings          String?
+  impression        String?
+  recommendation    String?
+  ccamCodes         String[]     @default([])
+  cim10Codes        String[]     @default([])
+  adicapCodes       String[]     @default([])
+  draftedAt         DateTime?
+  validatedAt       DateTime?
+  examinationId     String
+  createdById       String
+  validatedById     String?
+  createdAt         DateTime     @default(now())
+  updatedAt         DateTime     @updatedAt
+
+  // Relations
+  examination   Examination @relation(fields: [examinationId], references: [id])
+  createdBy     User        @relation("CreatedByUser", fields: [createdById], references: [id])
+  validatedBy   User?       @relation("ValidatedByUser", fields: [validatedById], references: [id])
+
+  @@map("reports")
+}
+
+model ReportTemplate {
+  id          String   @id @default(cuid())
+  name        String
+  modality    Modality
+  examType    String
+  indication  String?
+  technique   String?
+  findings    String?
+  impression  String?
+  active      Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([name, modality, examType], name: "name_modality_examType")
+  @@map("report_templates")
+}
+
+enum UserRole {
+  ADMIN
+  RADIOLOGIST_SENIOR
+  RADIOLOGIST_JUNIOR
+  TECHNICIAN
+  SECRETARY
+}
+
+enum Gender {
+  M
+  F
+  OTHER
+}
+
+enum ExaminationStatus {
+  SCHEDULED
+  IN_PROGRESS
+  ACQUIRED
+  REPORTING
+  VALIDATED
+  CANCELLED
+  EMERGENCY
+}
+
+enum Priority {
+  LOW
+  NORMAL
+  HIGH
+  URGENT
+  EMERGENCY
+}
+
+enum Modality {
+  CR    // Computed Radiography
+  CT    // Computed Tomography
+  MR    // Magnetic Resonance
+  US    // Ultrasound
+  MG    // Mammography
+  RF    // Radiofluoroscopy
+  DX    // Digital Radiography
+  NM    // Nuclear Medicine
+  PT    // Positron Emission Tomography
+  XA    // X-Ray Angiography
+}
+
+enum ReportStatus {
+  DRAFT
+  PRELIMINARY
+  FINAL
+  AMENDED
+}
