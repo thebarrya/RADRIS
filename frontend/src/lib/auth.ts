@@ -1,9 +1,9 @@
 import { NextAuthOptions } from 'next-auth';
 import CredentialsProvider from 'next-auth/providers/credentials';
-import { serverApi } from './api';
 
 export const authOptions: NextAuthOptions = {
   providers: [
+    // Temporarily simplified to test NextAuth initialization
     CredentialsProvider({
       name: 'credentials',
       credentials: {
@@ -16,12 +16,27 @@ export const authOptions: NextAuthOptions = {
         }
 
         try {
-          const response = await serverApi.post('/auth/login', {
-            email: credentials.email,
-            password: credentials.password,
+          // Use explicit backend URL - ensure we're using the correct Docker network hostname
+          const backendUrl = process.env.INTERNAL_API_URL || 'http://localhost:3001/api';
+          
+          const response = await fetch(`${backendUrl}/auth/login`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              email: credentials.email,
+              password: credentials.password,
+            }),
           });
 
-          const { token, user } = response.data;
+          if (!response.ok) {
+            console.error('Backend login failed:', response.status, response.statusText);
+            return null;
+          }
+
+          const data = await response.json();
+          const { token, user } = data;
 
           if (token && user) {
             return {
@@ -35,7 +50,7 @@ export const authOptions: NextAuthOptions = {
 
           return null;
         } catch (error) {
-          console.error('Auth error:', error);
+          console.error('Auth error:', error instanceof Error ? error.message : 'Unknown error');
           return null;
         }
       },
