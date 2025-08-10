@@ -3,7 +3,10 @@ window.config = {
   extensions: [],
   modes: [],
   showStudyList: true,
-  // some way to identify the adapter service
+  investigationalUseDialog: {
+    option: 'never'
+  },
+  // Static data sources configuration for OHIF v3
   dataSources: [
     {
       namespace: '@ohif/extension-default.dataSourcesModule.dicomweb',
@@ -15,14 +18,22 @@ window.config = {
         qidoRoot: 'http://localhost:8042/dicom-web',
         wadoRoot: 'http://localhost:8042/dicom-web',
         qidoSupportsIncludeField: false,
-        supportsReject: true,
         imageRendering: 'wadors',
         thumbnailRendering: 'wadors',
         enableStudyLazyLoad: true,
         supportsFuzzyMatching: false,
         supportsWildcard: false,
         staticWado: true,
-        singlepart: 'bulkdata,pdf'
+        singlepart: 'bulkdata,pdf',
+        requestOptions: {
+          requestCredentials: 'omit',
+          logRequests: true,
+          headers: {
+            'Access-Control-Allow-Origin': '*',
+            'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
+            'Access-Control-Allow-Headers': 'Content-Type, Authorization'
+          }
+        }
       },
     },
   ],

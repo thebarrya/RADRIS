@@ -1,83 +1,107 @@
 {
-  "Name" : "RADRIS PACS",
-  "DicomAet" : "RADRIS",
-  "DicomCheckCalledAet" : false,
-  "DicomPort" : 4242,
-  "DicomServerEnabled" : true,
-  "DicomAlwaysAllowEcho" : true,
-  "DicomAlwaysAllowFind" : true,
-  "DicomAlwaysAllowMove" : true,
-  "DicomAlwaysAllowStore" : true,
+  "Name": "RADRIS PACS",
+  "DicomAet": "RADRIS",
+  "DicomPort": 4242,
+  "HttpPort": 8042,
   
-  "HttpPort" : 8042,
-  "HttpCompressionEnabled" : true,
-  "HttpRequestTimeout" : 30,
-  "HttpHeaders" : {
-    "Access-Control-Allow-Origin" : "*",
-    "Access-Control-Allow-Methods" : "GET, POST, PUT, DELETE, OPTIONS",
-    "Access-Control-Allow-Headers" : "Content-Type, Authorization, X-Requested-With"
-  },
-  
-  "PostgreSQL" : {
-    "EnableIndex" : true,
-    "EnableStorage" : true,
-    "Host" : "postgres",
-    "Port" : 5432,
-    "Database" : "orthanc",
-    "Username" : "radris",
-    "Password" : "radris123"
+  "PostgreSQL": {
+    "Host": "postgres",
+    "Port": 5432,
+    "Database": "orthanc",
+    "Username": "radris",
+    "Password": "radris123",
+    "EnableIndex": true,
+    "EnableStorage": true
   },
 
-  "Plugins" : [
-    "/usr/share/orthanc/plugins",
-    "/usr/local/share/orthanc/plugins"
+
+  "DicomWeb": {
+    "Enable": true,
+    "Root": "/dicom-web/",
+    "EnableWado": true,
+    "WadoRoot": "/wado",
+    "Ssl": false,
+    "QidoCaseSensitive": false,
+    "Host": "0.0.0.0",
+    "Port": 8042,
+    "MetadataMode": "Full"
+  },
+
+  "Plugins": [
+    "libOrthancDicomWeb.so",
+    "libOrthancWSI.so"
   ],
 
-  "DicomWeb" : {
-    "Enable" : true,
-    "Root" : "/dicom-web/",
-    "EnableWado" : true,
-    "WadoRoot" : "/wado",
-    "Ssl" : false,
-    "StudiesMetadata" : "MainDicomTags",
-    "SeriesMetadata" : "MainDicomTags"
+  "OrthancExplorer2": {
+    "Enable": true,
+    "IsDefaultUI": true,
+    "Theme": "dark",
+    "LogLevel": "default",
+    "EnableShares": true,
+    "ShowOrthancName": true,
+    "UiOptions": {
+      "EnableOpenInOhifViewer3": true,
+      "OhifViewer3PublicRoot": "http://localhost:3005/",
+      "StudyListColumns": [
+        "PatientName",
+        "PatientID", 
+        "StudyDate",
+        "StudyDescription",
+        "AccessionNumber"
+      ]
+    },
+    "Viewers": {
+      "OhifViewer3": {
+        "Enable": true,
+        "PublicRoot": "http://localhost:3005/viewer?datasources=dicomweb",
+        "OpenNewTab": true,
+        "StudyInstanceUIDUrlParameter": "StudyInstanceUIDs"
+      },
+      "StoneWebViewer": {
+        "Enable": true
+      },
+      "VolView": {
+        "Enable": true
+      }
+    },
+    "StudyListContentScript": "window.oe2.setViewerUrl('ohif', 'http://localhost:3005/viewer?datasources=dicomweb&StudyInstanceUIDs={{StudyInstanceUID}}');"
   },
 
-  "WebViewer" : {
-    "CachePath" : "/var/lib/orthanc/cache"
+  "HttpServerEnabled": true,
+  "HttpDescribeErrors": true,
+  "HttpCompressionEnabled": true,
+  "HttpRequestTimeout": 30,
+
+  "HttpHeaders": {
+    "Access-Control-Allow-Origin": "*",
+    "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
+    "Access-Control-Allow-Headers": "Content-Type, Authorization, Cache-Control, X-Requested-With",
+    "Access-Control-Allow-Credentials": "true"
   },
 
-  "OHIF" : {
-    "RouterBasename" : "/ohif/",
-    "DataSource" : "dicom-web"
-  },
-  
-  "StoneWebViewer" : {
-    "Enable" : true
-  },
+  "DicomServerEnabled": true,
+  "DicomAlwaysAllowEcho": true,
+  "DicomAlwaysAllowFind": true,
+  "DicomAlwaysAllowMove": true,
+  "DicomAlwaysAllowGet": true,
+  "DicomAlwaysAllowStore": true,
 
-  "RegisteredUsers" : {
-    "radris" : "radris123"
-  },
+  "RemoteAccessAllowed": true,
+  "AuthenticationEnabled": false,
+  "SslEnabled": false,
 
-  "RemoteAccessAllowed" : true,
-  "AuthenticationEnabled" : false,
-  "SslEnabled" : false,
-  
-  "StorageCompression" : false,
-  "MaximumStorageSize" : 0,
-  "MaximumPatientCount" : 0,
+  "LimitFindResults": 0,
+  "LimitFindInstances": 0,
+  "MaximumStorageSize": 0,
+  "MaximumPatientCount": 0,
 
-  "LuaScripts" : [],
-  "Worklists" : {
-    "Enable" : true,
-    "Database" : "/var/lib/orthanc/worklists"
-  },
+  "LogLevel": "default",
+  "ConcurrentJobs": 4,
 
-  "DefaultEncoding" : "Latin1",
-  "DeidentifyLogs" : true,
-  "LogExportedResources" : false,
-  
-  "ConcurrentJobs" : 2,
-  "HttpsCACertificates" : "/etc/ssl/certs/ca-certificates.crt"
+  "StorageDirectory": "/var/lib/orthanc/db",
+  "IndexDirectory": "/var/lib/orthanc/db",
+
+  "StoneWebViewer": {
+    "Enable": true
+  }
 }

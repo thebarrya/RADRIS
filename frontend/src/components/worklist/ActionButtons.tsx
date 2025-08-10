@@ -3,6 +3,8 @@
 import { useState } from 'react';
 import { Examination } from '@/types';
 import { Button } from '@/components/ui/button';
+import { ViewerService } from '@/services/viewerService';
+import toast from 'react-hot-toast';
 
 interface ActionButtonsProps {
   examination: Examination;
@@ -10,13 +12,24 @@ interface ActionButtonsProps {
 
 export function ActionButtons({ examination }: ActionButtonsProps) {
   const [showMenu, setShowMenu] = useState(false);
+  const [isOpeningViewer, setIsOpeningViewer] = useState(false);
 
-  const openViewer = () => {
-    if (examination.studyInstanceUID) {
-      // Open OHIF viewer in new tab
-      window.open(`http://localhost:3005/viewer/${examination.studyInstanceUID}`, '_blank');
-    } else {
-      alert('Aucune image disponible pour cet examen');
+  const openViewer = async () => {
+    const viewerStatus = ViewerService.getViewerStatus(examination);
+    
+    if (!viewerStatus.available) {
+      toast.error(viewerStatus.reason || 'Impossible d\'ouvrir le visualiseur');
+      return;
+    }
+
+    setIsOpeningViewer(true);
+    try {
+      await ViewerService.openExaminationInViewer(examination);
+    } catch (error) {
+      // Error handling is done in ViewerService
+      console.error('Viewer error:', error);
+    } finally {
+      setIsOpeningViewer(false);
     }
   };
 
@@ -33,17 +46,40 @@ export function ActionButtons({ examination }: ActionButtonsProps) {
   return (
     <div className="flex items-center space-x-1">
       {/* View Images */}
-      {examination.imagesAvailable && (
-        <Button
-          variant="ghost"
-          size="sm"
-          className="h-6 w-6 p-0 text-blue-600 hover:text-blue-800"
-          onClick={openViewer}
-          title="Ouvrir le visualiseur"
-        >
-          🖼️
-        </Button>
-      )}
+      {(() => {
+        const viewerStatus = ViewerService.getViewerStatus(examination);
+        
+        if (!viewerStatus.available) {
+          return (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-6 w-6 p-0 text-gray-400 cursor-not-allowed"
+              disabled
+              title={viewerStatus.reason || 'Visualiseur non disponible'}
+            >
+              🖼️
+            </Button>
+          );
+        }
+        
+        return (
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-6 w-6 p-0 text-blue-600 hover:text-blue-800"
+            onClick={openViewer}
+            disabled={isOpeningViewer}
+            title="Ouvrir le visualiseur DICOM"
+          >
+            {isOpeningViewer ? (
+              <div className="animate-spin w-3 h-3 border border-blue-500 border-t-transparent rounded-full" />
+            ) : (
+              '🖼️'
+            )}
+          </Button>
+        );
+      })()}
 
       {/* Create/View Report */}
       <Button

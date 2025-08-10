@@ -11,7 +11,7 @@ export const api = axios.create({
 
 // Server-side API instance (for NextAuth and server components)
 export const serverApi = axios.create({
-  baseURL: process.env.INTERNAL_API_URL || 'http://backend:3001/api',
+  baseURL: process.env.INTERNAL_API_URL || 'http://localhost:3001/api',
   timeout: 30000,
 });
 
@@ -33,6 +33,8 @@ serverApi.interceptors.response.use(
 );
 
 // Request interceptor to add auth token
+// Temporarily disabled to debug NextAuth initialization issues
+/*
 api.interceptors.request.use(
   async (config) => {
     try {
@@ -50,6 +52,7 @@ api.interceptors.request.use(
     return Promise.reject(error);
   }
 );
+*/
 
 // Response interceptor for error handling
 api.interceptors.response.use(

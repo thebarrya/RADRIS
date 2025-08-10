@@ -6,8 +6,10 @@ import { StatusIndicator } from './StatusIndicator';
 import { PatientCell } from './PatientCell';
 import { ModalityBadge } from './ModalityBadge';
 import { ActionButtons } from './ActionButtons';
+import { ViewerService } from '@/services/viewerService';
 import { formatDate, formatTime, calculateAge } from '@/utils/dateUtils';
 import { cn } from '@/lib/utils';
+import toast from 'react-hot-toast';
 
 interface WorklistTableProps {
   data: Examination[];
@@ -60,6 +62,7 @@ export function WorklistTable({
   const [visibleColumns, setVisibleColumns] = useState<string[]>(
     COLUMNS.map(col => col.id)
   );
+  const [openingViewers, setOpeningViewers] = useState<Set<string>>(new Set());
 
   const handleSort = useCallback((columnId: string) => {
     if (params.sortBy === columnId) {
@@ -92,6 +95,29 @@ export function WorklistTable({
     if (params.sortBy !== columnId) return '↕️';
     return params.sortOrder === 'asc' ? '↑' : '↓';
   };
+
+  const handleOpenViewer = useCallback(async (examination: Examination) => {
+    const viewerStatus = ViewerService.getViewerStatus(examination);
+    
+    if (!viewerStatus.available) {
+      toast.error(viewerStatus.reason || 'Impossible d\'ouvrir le visualiseur');
+      return;
+    }
+
+    setOpeningViewers(prev => new Set(prev).add(examination.id));
+    try {
+      await ViewerService.openExaminationInViewer(examination);
+    } catch (error) {
+      // Error handling is done in ViewerService
+      console.error('Viewer error:', error);
+    } finally {
+      setOpeningViewers(prev => {
+        const next = new Set(prev);
+        next.delete(examination.id);
+        return next;
+      });
+    }
+  }, []);
 
   if (error) {
     return (
@@ -341,17 +367,39 @@ export function WorklistTable({
                     {/* Images */}
                     {visibleColumns.includes('images') && (
                       <td className="px-2 py-2 text-center">
-                        {examination.imagesAvailable ? (
-                          <button 
-                            className="text-blue-600 hover:text-blue-800"
-                            onClick={() => window.open(`/viewer/${examination.studyInstanceUID}`, '_blank')}
-                            title="Ouvrir le visualiseur"
-                          >
-                            🖼️
-                          </button>
-                        ) : (
-                          <span className="text-gray-400">-</span>
-                        )}
+                        {(() => {
+                          const viewerStatus = ViewerService.getViewerStatus(examination);
+                          const isOpening = openingViewers.has(examination.id);
+                          
+                          if (!viewerStatus.available) {
+                            return (
+                              <span 
+                                className="text-gray-400 cursor-help" 
+                                title={viewerStatus.reason || 'Visualiseur non disponible'}
+                              >
+                                -
+                              </span>
+                            );
+                          }
+                          
+                          return (
+                            <button 
+                              className="text-blue-600 hover:text-blue-800 disabled:opacity-50 disabled:cursor-not-allowed"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleOpenViewer(examination);
+                              }}
+                              disabled={isOpening}
+                              title="Ouvrir le visualiseur DICOM"
+                            >
+                              {isOpening ? (
+                                <div className="animate-spin w-3 h-3 border border-blue-500 border-t-transparent rounded-full inline-block" />
+                              ) : (
+                                '🖼️'
+                              )}
+                            </button>
+                          );
+                        })()}
                       </td>
                     )}
 
