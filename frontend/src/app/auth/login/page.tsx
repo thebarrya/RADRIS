@@ -99,7 +99,7 @@ export default function LoginPage() {
                   <Input
                     id="password"
                     type="password"
-                    placeholder="••••••••"
+                    placeholder="********"
                     {...register('password')}
                     className={errors.password ? 'border-red-500' : ''}
                   />

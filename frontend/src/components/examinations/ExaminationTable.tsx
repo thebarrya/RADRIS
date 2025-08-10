@@ -8,6 +8,7 @@ import { ModalityBadge } from '@/components/worklist/ModalityBadge';
 import { formatDate, formatTime, calculateAge } from '@/utils/dateUtils';
 import { cn } from '@/lib/utils';
 import { examinationsApi } from '@/lib/api';
+import { ViewerService } from '@/services/viewerService';
 import toast from 'react-hot-toast';
 
 interface ExaminationTableProps {
@@ -100,11 +101,22 @@ export function ExaminationTable({
     }
   };
 
-  const openViewer = (examination: Examination) => {
-    if (examination.studyInstanceUID) {
-      window.open(`http://localhost:3005/viewer/${examination.studyInstanceUID}`, '_blank');
-    } else {
-      toast.error('Aucune image disponible pour cet examen');
+  const openViewer = async (examination: Examination) => {
+    const viewerStatus = ViewerService.getViewerStatus(examination);
+    
+    if (!viewerStatus.available) {
+      toast.error(viewerStatus.reason || 'Impossible d\'ouvrir le visualiseur');
+      return;
+    }
+
+    setIsUpdating(true);
+    try {
+      await ViewerService.openExaminationInViewer(examination);
+    } catch (error) {
+      // Error handling is done in ViewerService
+      console.error('Viewer error:', error);
+    } finally {
+      setIsUpdating(false);
     }
   };
 
@@ -362,19 +374,40 @@ export function ExaminationTable({
                   </td>
                   
                   <td className="px-4 py-3 text-center" onClick={(e) => e.stopPropagation()}>
-                    {examination.imagesAvailable ? (
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        onClick={() => openViewer(examination)}
-                        className="p-1 h-auto text-blue-600 hover:text-blue-800"
-                        title="Ouvrir le visualiseur"
-                      >
-                        🖼️
-                      </Button>
-                    ) : (
-                      <span className="text-gray-400">-</span>
-                    )}
+                    {(() => {
+                      const viewerStatus = ViewerService.getViewerStatus(examination);
+                      
+                      if (!viewerStatus.available) {
+                        return (
+                          <span 
+                            className="text-gray-400 cursor-help" 
+                            title={viewerStatus.reason || 'Visualiseur non disponible'}
+                          >
+                            -
+                          </span>
+                        );
+                      }
+                      
+                      return (
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => openViewer(examination)}
+                          disabled={isUpdating}
+                          className={cn(
+                            "p-1 h-auto text-blue-600 hover:text-blue-800 transition-all",
+                            isUpdating && "opacity-50 cursor-not-allowed"
+                          )}
+                          title="Ouvrir le visualiseur DICOM"
+                        >
+                          {isUpdating ? (
+                            <div className="animate-spin w-4 h-4 border border-blue-500 border-t-transparent rounded-full" />
+                          ) : (
+                            '🖼️'
+                          )}
+                        </Button>
+                      );
+                    })()}
                   </td>
                   
                   <td className="px-4 py-3 text-center" onClick={(e) => e.stopPropagation()}>

@@ -1,5 +1,11 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  // Environment variables
+  env: {
+    INTERNAL_API_URL: process.env.INTERNAL_API_URL,
+    NEXTAUTH_SECRET: process.env.NEXTAUTH_SECRET,
+    NEXTAUTH_URL: process.env.NEXTAUTH_URL,
+  },
   typescript: {
     // !! WARN !!
     // Dangerously allow production builds to successfully complete even if
@@ -16,9 +22,22 @@ const nextConfig = {
   },
   async rewrites() {
     return [
+      // Proxy specific backend routes, but exclude NextAuth routes
       {
-        source: '/api/:path*',
-        destination: `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'}/api/:path*`,
+        source: '/api/patients/:path*',
+        destination: `${process.env.INTERNAL_API_URL || 'http://localhost:3001/api'}/patients/:path*`,
+      },
+      {
+        source: '/api/examinations/:path*',
+        destination: `${process.env.INTERNAL_API_URL || 'http://localhost:3001/api'}/examinations/:path*`,
+      },
+      {
+        source: '/api/reports/:path*',
+        destination: `${process.env.INTERNAL_API_URL || 'http://localhost:3001/api'}/reports/:path*`,
+      },
+      {
+        source: '/api/dicom/:path*',
+        destination: `${process.env.INTERNAL_API_URL || 'http://localhost:3001/api'}/dicom/:path*`,
       },
     ];
   },
