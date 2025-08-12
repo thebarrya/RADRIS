@@ -416,11 +416,10 @@ export const reportRoutes: FastifyPluginAsync = async (fastify) => {
         take: 100,
         orderBy: { validatedAt: 'desc' },
       }),
-      // Reports by modality
-      fastify.prisma.report.groupBy({
-        by: ['examination'],
-        _count: true,
-        include: {
+      // Reports by modality (using findMany instead of groupBy since groupBy doesn't support include)
+      fastify.prisma.report.findMany({
+        select: {
+          id: true,
           examination: {
             select: { modality: true },
           },

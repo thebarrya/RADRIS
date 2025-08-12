@@ -84,15 +84,15 @@ export function WorklistHeader({
               <input
                 type="date"
                 className="border rounded px-2 py-1 text-xs"
-                value={params.dateFrom || ''}
-                onChange={(e) => onParamsChange({ dateFrom: e.target.value || undefined })}
+                value={params.dateFrom ? params.dateFrom.toISOString().split('T')[0] : ''}
+                onChange={(e) => onParamsChange({ dateFrom: e.target.value ? new Date(e.target.value) : undefined })}
               />
               <span>→</span>
               <input
                 type="date"
                 className="border rounded px-2 py-1 text-xs"
-                value={params.dateTo || ''}
-                onChange={(e) => onParamsChange({ dateTo: e.target.value || undefined })}
+                value={params.dateTo ? params.dateTo.toISOString().split('T')[0] : ''}
+                onChange={(e) => onParamsChange({ dateTo: e.target.value ? new Date(e.target.value) : undefined })}
               />
             </div>
 

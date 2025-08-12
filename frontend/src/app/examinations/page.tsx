@@ -3,9 +3,11 @@
 import { useState, useEffect } from 'react';
 import { useSession } from 'next-auth/react';
 import { redirect } from 'next/navigation';
-// import { ExaminationTable } from '@/components/examinations/ExaminationTable';
-// import { ExaminationFilters } from '@/components/examinations/ExaminationFilters';
-// import { CreateExaminationModal } from '@/components/examinations/CreateExaminationModal';
+import { AppLayout } from '@/components/layout/AppLayout';
+import { ExaminationTable } from '@/components/examinations/ExaminationTable';
+import { ExaminationFilters } from '@/components/examinations/ExaminationFilters';
+import { CreateExaminationModal } from '@/components/examinations/CreateExaminationModal';
+import { DicomSyncPanel } from '@/components/examinations/DicomSyncPanel';
 import { Button } from '@/components/ui/button';
 import { Examination } from '@/types';
 import { examinationsApi } from '@/lib/api';
@@ -37,19 +39,6 @@ export default function ExaminationsPage() {
     sortOrder: 'desc' as 'asc' | 'desc',
   });
 
-  // Redirect if not authenticated
-  if (status === 'loading') {
-    return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-blue-600"></div>
-      </div>
-    );
-  }
-
-  if (!session) {
-    redirect('/auth/login');
-  }
-
   const fetchExaminations = async () => {
     try {
       setIsLoading(true);
@@ -66,14 +55,29 @@ export default function ExaminationsPage() {
   };
 
   useEffect(() => {
-    fetchExaminations();
-  }, [filters]);
+    if (session) {
+      fetchExaminations();
+    }
+  }, [session, filters]);
+
+  // Redirect if not authenticated
+  if (status === 'loading') {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-blue-600"></div>
+      </div>
+    );
+  }
+
+  if (!session) {
+    redirect('/auth/login');
+  }
 
   const handleFilterChange = (newFilters: any) => {
     setFilters(prev => ({
       ...prev,
       ...newFilters,
-      page: 1, // Reset to first page on filter change
+      page: 1, // Reset to first page when filters change
     }));
   };
 
@@ -90,13 +94,13 @@ export default function ExaminationsPage() {
   };
 
   const handleExaminationCreated = () => {
-    fetchExaminations(); // Refresh the list
+    fetchExaminations();
     setShowCreateModal(false);
   };
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <div className="flex flex-col h-screen">
+    <AppLayout>
+      <div className="flex flex-col min-h-screen">
         {/* Header */}
         <div className="bg-white border-b shadow-sm">
           <div className="px-6 py-4">
@@ -128,21 +132,61 @@ export default function ExaminationsPage() {
           </div>
         </div>
 
-        {/* Placeholder Content */}
-        <div className="flex-1 flex items-center justify-center">
-          <div className="text-center">
-            <h2 className="text-xl font-semibold text-gray-900 mb-2">
-              Page des examens en développement
-            </h2>
-            <p className="text-gray-600 mb-4">
-              Cette page sera bientôt disponible.
-            </p>
-            <Button onClick={() => window.history.back()} variant="outline">
-              Retour
-            </Button>
+        {/* Filters */}
+        <div className="bg-white border-b">
+          <div className="px-6 py-4">
+            <ExaminationFilters
+              onFilter={handleFilterChange}
+              currentFilters={filters}
+            />
           </div>
         </div>
+
+        {/* Main Content */}
+        <div className="flex-1 overflow-hidden">
+          <div className="grid grid-cols-1 xl:grid-cols-4 gap-6 p-6">
+            {/* DICOM Sync Panel */}
+            <div className="xl:col-span-1">
+              <DicomSyncPanel onSyncComplete={fetchExaminations} />
+            </div>
+            
+            {/* Examinations Table */}
+            <div className="xl:col-span-3">
+              {error ? (
+                <div className="flex items-center justify-center h-64">
+                  <div className="text-center">
+                    <div className="text-red-600 mb-2">⚠️ {error}</div>
+                    <Button onClick={fetchExaminations} variant="outline">
+                      Réessayer
+                    </Button>
+                  </div>
+                </div>
+              ) : (
+                <ExaminationTable
+                  examinations={examinations}
+                  pagination={pagination}
+                  isLoading={isLoading}
+                  onPageChange={handlePageChange}
+                  onSort={handleSort}
+                  currentSort={{
+                    sortBy: filters.sortBy,
+                    sortOrder: filters.sortOrder,
+                  }}
+                  onRefresh={fetchExaminations}
+                />
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* Create Examination Modal */}
+        {showCreateModal && (
+          <CreateExaminationModal
+            onClose={() => setShowCreateModal(false)}
+            onExaminationCreated={handleExaminationCreated}
+          />
+        )}
       </div>
-    </div>
+    </AppLayout>
   );
 }

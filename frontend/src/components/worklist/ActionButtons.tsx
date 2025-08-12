@@ -34,8 +34,22 @@ export function ActionButtons({ examination }: ActionButtonsProps) {
   };
 
   const openReport = () => {
-    // Navigate to report page
-    window.open(`/reports/${examination.id}`, '_blank');
+    // Check if examination has existing reports
+    const hasReports = examination.reports && examination.reports.length > 0;
+    
+    if (hasReports) {
+      // Open existing report for viewing
+      const latestReport = examination.reports[examination.reports.length - 1];
+      // Use viewer for finalized reports, editor for drafts
+      if (latestReport.status === 'FINAL' || latestReport.status === 'AMENDED') {
+        window.open(`/reports/${latestReport.id}`, '_blank');
+      } else {
+        window.open(`/reports/editor?examinationId=${examination.id}&reportId=${latestReport.id}`, '_blank');
+      }
+    } else {
+      // Create new report
+      window.open(`/reports/editor?examinationId=${examination.id}`, '_blank');
+    }
   };
 
   const editExamination = () => {

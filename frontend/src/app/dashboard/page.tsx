@@ -15,6 +15,14 @@ import { UserRole } from '@/types';
 
 export default function DashboardPage() {
   const { data: session, status } = useSession();
+  
+  // All hooks must be called before any conditional returns
+  const {
+    data: dashboardData,
+    isLoading,
+    error,
+    refetch
+  } = useDashboardStats();
 
   // Redirect if not authenticated
   if (status === 'loading') {
@@ -28,13 +36,6 @@ export default function DashboardPage() {
   if (!session) {
     redirect('/auth/login');
   }
-
-  const {
-    data: dashboardData,
-    isLoading,
-    error,
-    refetch
-  } = useDashboardStats();
 
   const handleRefresh = () => {
     refetch();
@@ -53,6 +54,21 @@ export default function DashboardPage() {
         {/* Main Dashboard Content */}
         <div className="flex-1 overflow-auto p-6">
           <div className="max-w-7xl mx-auto space-y-6">
+            
+            {/* Debug Info - Remove in production */}
+            {process.env.NODE_ENV === 'development' && (
+              <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 text-sm">
+                <h3 className="font-semibold text-yellow-800 mb-2">Debug Info:</h3>
+                <div className="space-y-1 text-yellow-700">
+                  <div>Session Status: {status}</div>
+                  <div>Has Session: {session ? 'Yes' : 'No'}</div>
+                  <div>Has Access Token: {session?.accessToken ? 'Yes' : 'No'}</div>
+                  <div>User Role: {session?.user?.role || 'N/A'}</div>
+                  <div>Stats Loading: {isLoading ? 'Yes' : 'No'}</div>
+                  <div>Stats Error: {error?.message || 'None'}</div>
+                </div>
+              </div>
+            )}
             
             {/* Key Performance Indicators */}
             <DashboardStats 

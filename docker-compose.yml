@@ -15,6 +15,30 @@ services:
     networks:
       - radris-network
 
+  # OHIF Viewer v4.x - Modern DICOM viewer
+  ohif-viewer:
+    image: ohif/viewer:latest
+    container_name: radris-ohif
+    restart: unless-stopped
+    ports:
+      - "3005:80"
+    volumes:
+      - ./config/ohif-config.js:/usr/share/nginx/html/app-config.js:ro
+      - ./config/nginx-ohif.conf:/etc/nginx/conf.d/default.conf:ro
+    environment:
+      - NODE_ENV=production
+      - NGINX_WORKER_PROCESSES=auto
+      - NGINX_WORKER_CONNECTIONS=1024
+    depends_on:
+      - orthanc
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:80"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - radris-network
+      
   # Redis for caching and queues
   redis:
     image: redis:7-alpine
@@ -26,21 +50,45 @@ services:
     networks:
       - radris-network
 
-  # Orthanc PACS with OHIF and DICOMweb plugins
+  # Orthanc PACS with optimized plugins and PostgreSQL backend
   orthanc:
-    image: orthancteam/orthanc:24.8.1
+    image: orthancteam/orthanc:latest
     container_name: radris-orthanc
+    restart: unless-stopped
     environment:
       ORTHANC__NAME: "RADRIS PACS"
       ORTHANC__DICOM_AET: "RADRIS"
       ORTHANC__DICOM_PORT: 4242
       ORTHANC__HTTP_PORT: 8042
       ORTHANC__DICOM_SERVER_ENABLED: "true"
+      
+      # Performance optimizations
+      ORTHANC__CONCURRENT_JOBS: 8
+      ORTHANC__MAXIMUM_STORAGE_SIZE: 107374182400  # 100GB
+      ORTHANC__STORAGE_COMPRESSION: "true"
+      ORTHANC__HTTP_REQUEST_TIMEOUT: 60
+      
+      # Plugin activation
       STONE_WEB_VIEWER_PLUGIN_ENABLED: "true"
       DICOM_WEB_PLUGIN_ENABLED: "true"
       ORTHANC_EXPLORER_2_PLUGIN_ENABLED: "true"
-      ORTHANC__DICOM_WEB__SERIES_METADATA: "MainDicomTags"
-      ORTHANC__DICOM_WEB__STUDIES_METADATA: "MainDicomTags"
+      ORTHANC_GDCM_PLUGIN_ENABLED: "true"
+      ORTHANC_POSTGRESQL_PLUGIN_ENABLED: "true"
+      
+      # PostgreSQL backend for index
+      ORTHANC__POSTGRESQL__ENABLE_INDEX: "true"
+      ORTHANC__POSTGRESQL__ENABLE_STORAGE: "false"
+      ORTHANC__POSTGRESQL__HOST: "postgres"
+      ORTHANC__POSTGRESQL__PORT: 5432
+      ORTHANC__POSTGRESQL__DATABASE: "orthanc"
+      ORTHANC__POSTGRESQL__USERNAME: "radris"
+      ORTHANC__POSTGRESQL__PASSWORD: "radris123"
+      
+      # DICOMweb optimizations
+      ORTHANC__DICOM_WEB__STUDIES_METADATA: "Full"
+      ORTHANC__DICOM_WEB__SERIES_METADATA: "Full"
+      ORTHANC__DICOM_WEB__ENABLE_METADATA_CACHE: "true"
+      ORTHANC__DICOM_WEB__METADATA_WORKER_THREADS_COUNT: 4
     ports:
       - "8042:8042"  # HTTP API
       - "4242:4242"  # DICOM port
@@ -50,6 +98,11 @@ services:
       - orthanc_data:/var/lib/orthanc/db
       - orthanc_cache:/var/lib/orthanc/cache
       - ./config/orthanc.json:/etc/orthanc/orthanc.json:ro
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8042/system"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
     networks:
       - radris-network
 
@@ -102,20 +155,7 @@ services:
     networks:
       - radris-network
 
-  # OHIF Viewer
-  ohif-viewer:
-    image: ohif/viewer:latest
-    container_name: radris-ohif
-    environment:
-      - APP_CONFIG=/usr/share/nginx/html/app-config.js
-    ports:
-      - "3005:80"
-    volumes:
-      - ./config/ohif-config.js:/usr/share/nginx/html/app-config.js:ro
-    depends_on:
-      - orthanc
-    networks:
-      - radris-network
+
 
 volumes:
   postgres_data:

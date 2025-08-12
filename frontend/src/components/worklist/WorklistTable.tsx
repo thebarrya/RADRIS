@@ -6,6 +6,8 @@ import { StatusIndicator } from './StatusIndicator';
 import { PatientCell } from './PatientCell';
 import { ModalityBadge } from './ModalityBadge';
 import { ActionButtons } from './ActionButtons';
+import { ColumnManager } from './ColumnManager';
+import { BulkActions } from './BulkActions';
 import { ViewerService } from '@/services/viewerService';
 import { formatDate, formatTime, calculateAge } from '@/utils/dateUtils';
 import { cn } from '@/lib/utils';
@@ -27,27 +29,29 @@ interface Column {
   sortable: boolean;
   sticky?: 'left' | 'right';
   className?: string;
+  visible: boolean;
+  required?: boolean;
 }
 
-const COLUMNS: Column[] = [
-  { id: 'status', label: '', width: 40, sortable: false, sticky: 'left', className: 'text-center' },
-  { id: 'site', label: 'Site', width: 60, sortable: true },
-  { id: 'scheduledDate', label: 'Date', width: 90, sortable: true },
-  { id: 'scheduledTime', label: 'Heure', width: 70, sortable: true },
-  { id: 'patient', label: 'Patient', width: 180, sortable: true, sticky: 'left' },
-  { id: 'age', label: 'Âge', width: 60, sortable: true },
-  { id: 'warnings', label: 'Alertes', width: 80, sortable: false },
-  { id: 'antecedents', label: 'ATCD', width: 60, sortable: false },
-  { id: 'modality', label: 'Modalité', width: 80, sortable: true },
-  { id: 'examType', label: 'Examen', width: 200, sortable: true },
-  { id: 'bodyPart', label: 'Région', width: 120, sortable: true },
-  { id: 'referrer', label: 'Prescripteur', width: 140, sortable: true },
-  { id: 'assignedTo', label: 'Radiologue', width: 140, sortable: true },
-  { id: 'priority', label: 'Priorité', width: 80, sortable: true },
-  { id: 'images', label: 'Images', width: 70, sortable: false },
-  { id: 'report', label: 'CR', width: 60, sortable: false },
-  { id: 'comments', label: 'Notes', width: 60, sortable: false },
-  { id: 'actions', label: 'Actions', width: 100, sortable: false, sticky: 'right' },
+const DEFAULT_COLUMNS: Column[] = [
+  { id: 'status', label: '', width: 40, sortable: false, sticky: 'left', className: 'text-center', visible: true, required: true },
+  { id: 'site', label: 'Site', width: 60, sortable: true, visible: true },
+  { id: 'scheduledDate', label: 'Date', width: 90, sortable: true, visible: true },
+  { id: 'scheduledTime', label: 'Heure', width: 70, sortable: true, visible: true },
+  { id: 'patient', label: 'Patient', width: 180, sortable: true, sticky: 'left', visible: true, required: true },
+  { id: 'age', label: 'Âge', width: 60, sortable: true, visible: true },
+  { id: 'warnings', label: 'Alertes', width: 80, sortable: false, visible: true },
+  { id: 'antecedents', label: 'ATCD', width: 60, sortable: false, visible: false },
+  { id: 'modality', label: 'Modalité', width: 80, sortable: true, visible: true },
+  { id: 'examType', label: 'Examen', width: 200, sortable: true, visible: true },
+  { id: 'bodyPart', label: 'Région', width: 120, sortable: true, visible: true },
+  { id: 'referrer', label: 'Prescripteur', width: 140, sortable: true, visible: true },
+  { id: 'assignedTo', label: 'Radiologue', width: 140, sortable: true, visible: true },
+  { id: 'priority', label: 'Priorité', width: 80, sortable: true, visible: true },
+  { id: 'images', label: 'Images', width: 70, sortable: false, visible: true },
+  { id: 'report', label: 'CR', width: 60, sortable: false, visible: true },
+  { id: 'comments', label: 'Notes', width: 60, sortable: false, visible: false },
+  { id: 'actions', label: 'Actions', width: 100, sortable: false, sticky: 'right', visible: true, required: true },
 ];
 
 export function WorklistTable({ 
@@ -59,10 +63,67 @@ export function WorklistTable({
   error 
 }: WorklistTableProps) {
   const [selectedRows, setSelectedRows] = useState<string[]>([]);
-  const [visibleColumns, setVisibleColumns] = useState<string[]>(
-    COLUMNS.map(col => col.id)
-  );
+  const [columns, setColumns] = useState<Column[]>(DEFAULT_COLUMNS);
   const [openingViewers, setOpeningViewers] = useState<Set<string>>(new Set());
+  const [savedViews, setSavedViews] = useState<Array<{ name: string; columns: Column[] }>>([]);
+
+  const handleColumnsChange = (newColumns: Column[]) => {
+    setColumns(newColumns);
+    // Save to localStorage
+    localStorage.setItem('radris-worklist-columns', JSON.stringify(newColumns));
+  };
+
+  const handleSaveView = (name: string, viewColumns: Column[]) => {
+    const newView = { name, columns: viewColumns };
+    const updatedViews = [...savedViews, newView];
+    setSavedViews(updatedViews);
+    localStorage.setItem('radris-worklist-views', JSON.stringify(updatedViews));
+  };
+
+  const handleLoadView = (viewColumns: Column[]) => {
+    setColumns(viewColumns);
+    localStorage.setItem('radris-worklist-columns', JSON.stringify(viewColumns));
+  };
+
+  // Load saved columns and views on mount
+  useState(() => {
+    const savedColumns = localStorage.getItem('radris-worklist-columns');
+    if (savedColumns) {
+      try {
+        setColumns(JSON.parse(savedColumns));
+      } catch (e) {
+        console.error('Failed to load saved columns:', e);
+      }
+    }
+
+    const savedViewsData = localStorage.getItem('radris-worklist-views');
+    if (savedViewsData) {
+      try {
+        setSavedViews(JSON.parse(savedViewsData));
+      } catch (e) {
+        console.error('Failed to load saved views:', e);
+      }
+    }
+  });
+
+  const visibleColumns = columns.filter(col => col.visible);
+  
+  const isColumnVisible = (columnId: string) => {
+    return visibleColumns.some(col => col.id === columnId);
+  };
+
+  const handleBulkUpdate = async (action: string, data: any) => {
+    // Simulate API call
+    return new Promise<void>((resolve, reject) => {
+      setTimeout(() => {
+        console.log('Bulk action:', action, data);
+        // Here you would make the actual API call
+        resolve();
+      }, 1000);
+    });
+  };
+
+  const selectedExaminations = data.filter(exam => selectedRows.includes(exam.id));
 
   const handleSort = useCallback((columnId: string) => {
     if (params.sortBy === columnId) {
@@ -131,26 +192,34 @@ export function WorklistTable({
 
   return (
     <div className="flex flex-col h-full bg-white">
-      {/* Selection toolbar */}
-      {selectedRows.length > 0 && (
-        <div className="bg-blue-50 border-b px-4 py-2">
+      {/* Bulk actions bar */}
+      <BulkActions
+        selectedExaminations={selectedExaminations}
+        selectedIds={selectedRows}
+        onClearSelection={() => setSelectedRows([])}
+        onBulkUpdate={handleBulkUpdate}
+      />
+
+      {/* Toolbar with column manager */}
+      {selectedRows.length === 0 && (
+        <div className="bg-gray-50 border-b px-4 py-2">
           <div className="flex items-center justify-between">
-            <span className="text-sm text-blue-800">
-              {selectedRows.length} élément(s) sélectionné(s)
-            </span>
-            <div className="flex space-x-2">
-              <button className="text-xs bg-blue-600 text-white px-3 py-1 rounded">
-                Assigner
-              </button>
-              <button className="text-xs bg-orange-600 text-white px-3 py-1 rounded">
-                Changer statut
-              </button>
-              <button 
-                onClick={() => setSelectedRows([])}
-                className="text-xs bg-gray-600 text-white px-3 py-1 rounded"
-              >
-                Désélectionner
-              </button>
+            {/* Left side - Info */}
+            <div className="flex items-center space-x-2">
+              <span className="text-sm text-gray-600">
+                {data.length} examens affichés
+              </span>
+            </div>
+
+            {/* Right side - Column manager */}
+            <div className="flex items-center space-x-2">
+              <ColumnManager
+                columns={columns}
+                onColumnsChange={handleColumnsChange}
+                onSaveView={handleSaveView}
+                savedViews={savedViews}
+                onLoadView={handleLoadView}
+              />
             </div>
           </div>
         </div>
@@ -173,7 +242,7 @@ export function WorklistTable({
                   />
                 </th>
                 
-                {COLUMNS.filter(col => visibleColumns.includes(col.id)).map(column => (
+                {visibleColumns.map(column => (
                   <th
                     key={column.id}
                     className={cn(
@@ -206,7 +275,7 @@ export function WorklistTable({
                 [...Array(10)].map((_, i) => (
                   <tr key={i} className="border-b animate-pulse">
                     <td className="px-2 py-2"></td>
-                    {COLUMNS.map(col => (
+                    {visibleColumns.map(col => (
                       <td key={col.id} className="px-2 py-2">
                         <div className="h-4 bg-gray-200 rounded"></div>
                       </td>
@@ -215,7 +284,7 @@ export function WorklistTable({
                 ))
               ) : data.length === 0 ? (
                 <tr>
-                  <td colSpan={COLUMNS.length + 1} className="text-center py-8 text-gray-500">
+                  <td colSpan={visibleColumns.length + 1} className="text-center py-8 text-gray-500">
                     Aucun examen trouvé
                   </td>
                 </tr>
@@ -240,33 +309,33 @@ export function WorklistTable({
                     </td>
 
                     {/* Status */}
-                    {visibleColumns.includes('status') && (
+                    {isColumnVisible('status') && (
                       <td className="px-2 py-2 text-center">
                         <StatusIndicator status={examination.status} priority={examination.priority} />
                       </td>
                     )}
 
                     {/* Site */}
-                    {visibleColumns.includes('site') && (
+                    {isColumnVisible('site') && (
                       <td className="px-2 py-2">RIS</td>
                     )}
 
                     {/* Date */}
-                    {visibleColumns.includes('scheduledDate') && (
+                    {isColumnVisible('scheduledDate') && (
                       <td className="px-2 py-2">
                         {formatDate(examination.scheduledDate)}
                       </td>
                     )}
 
                     {/* Time */}
-                    {visibleColumns.includes('scheduledTime') && (
+                    {isColumnVisible('scheduledTime') && (
                       <td className="px-2 py-2">
                         {formatTime(examination.scheduledDate)}
                       </td>
                     )}
 
                     {/* Patient */}
-                    {visibleColumns.includes('patient') && (
+                    {isColumnVisible('patient') && (
                       <td className={cn(
                         'px-2 py-2 sticky left-9 bg-white',
                         selectedRows.includes(examination.id) && 'bg-blue-50'
@@ -279,14 +348,14 @@ export function WorklistTable({
                     )}
 
                     {/* Age */}
-                    {visibleColumns.includes('age') && (
+                    {isColumnVisible('age') && (
                       <td className="px-2 py-2 text-center">
                         {calculateAge(examination.patient.birthDate)}
                       </td>
                     )}
 
                     {/* Warnings */}
-                    {visibleColumns.includes('warnings') && (
+                    {isColumnVisible('warnings') && (
                       <td className="px-2 py-2 text-center">
                         {examination.patient.warnings.length > 0 && (
                           <div className="flex space-x-1">
@@ -299,21 +368,21 @@ export function WorklistTable({
                     )}
 
                     {/* Medical history */}
-                    {visibleColumns.includes('antecedents') && (
+                    {isColumnVisible('antecedents') && (
                       <td className="px-2 py-2 text-center">
                         {examination.patient.medicalHistory?.length > 0 ? '📋' : ''}
                       </td>
                     )}
 
                     {/* Modality */}
-                    {visibleColumns.includes('modality') && (
+                    {isColumnVisible('modality') && (
                       <td className="px-2 py-2">
                         <ModalityBadge modality={examination.modality} />
                       </td>
                     )}
 
                     {/* Exam Type */}
-                    {visibleColumns.includes('examType') && (
+                    {isColumnVisible('examType') && (
                       <td className="px-2 py-2" title={examination.procedure}>
                         <div className="truncate">
                           {examination.examType}
@@ -322,14 +391,14 @@ export function WorklistTable({
                     )}
 
                     {/* Body Part */}
-                    {visibleColumns.includes('bodyPart') && (
+                    {isColumnVisible('bodyPart') && (
                       <td className="px-2 py-2">
                         {examination.bodyPart}
                       </td>
                     )}
 
                     {/* Referrer */}
-                    {visibleColumns.includes('referrer') && (
+                    {isColumnVisible('referrer') && (
                       <td className="px-2 py-2">
                         {examination.referrer ? 
                           `${examination.referrer.firstName} ${examination.referrer.lastName}` : 
@@ -339,7 +408,7 @@ export function WorklistTable({
                     )}
 
                     {/* Assigned To */}
-                    {visibleColumns.includes('assignedTo') && (
+                    {isColumnVisible('assignedTo') && (
                       <td className="px-2 py-2">
                         {examination.assignedTo ? 
                           `${examination.assignedTo.firstName} ${examination.assignedTo.lastName}` : 
@@ -349,7 +418,7 @@ export function WorklistTable({
                     )}
 
                     {/* Priority */}
-                    {visibleColumns.includes('priority') && (
+                    {isColumnVisible('priority') && (
                       <td className="px-2 py-2">
                         <span className={cn(
                           'px-2 py-1 text-xs rounded',
@@ -365,7 +434,7 @@ export function WorklistTable({
                     )}
 
                     {/* Images */}
-                    {visibleColumns.includes('images') && (
+                    {isColumnVisible('images') && (
                       <td className="px-2 py-2 text-center">
                         {(() => {
                           const viewerStatus = ViewerService.getViewerStatus(examination);
@@ -404,7 +473,7 @@ export function WorklistTable({
                     )}
 
                     {/* Report */}
-                    {visibleColumns.includes('report') && (
+                    {isColumnVisible('report') && (
                       <td className="px-2 py-2 text-center">
                         {examination.reports && examination.reports.length > 0 ? (
                           <div className={cn(
@@ -420,7 +489,7 @@ export function WorklistTable({
                     )}
 
                     {/* Comments */}
-                    {visibleColumns.includes('comments') && (
+                    {isColumnVisible('comments') && (
                       <td className="px-2 py-2 text-center">
                         {examination.comments && examination.comments.length > 0 ? (
                           <span title={examination.comments.join(', ')}>💬</span>
@@ -431,7 +500,7 @@ export function WorklistTable({
                     )}
 
                     {/* Actions */}
-                    {visibleColumns.includes('actions') && (
+                    {isColumnVisible('actions') && (
                       <td className={cn(
                         'px-2 py-2 sticky right-0 bg-white',
                         selectedRows.includes(examination.id) && 'bg-blue-50'

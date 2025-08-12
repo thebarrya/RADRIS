@@ -79,7 +79,7 @@ async function start() {
       });
     });
 
-    // Initialize WebSocket service
+    // Initialize WebSocket service (temporarily disabled)
     // const wsService = new WebSocketService(server);
     // server.decorate('websocket', wsService);
 
@@ -150,6 +150,6 @@ declare module 'fastify' {
   interface FastifyInstance {
     prisma: PrismaClient;
     redis: Redis;
-    // websocket: WebSocketService;
+    websocket?: any; // Optional websocket service
   }
 }

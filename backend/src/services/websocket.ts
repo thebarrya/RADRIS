@@ -1,5 +1,5 @@
 import { FastifyInstance } from 'fastify';
-import { Server } from 'ws';
+import { Server, WebSocket } from 'ws';
 import { IncomingMessage } from 'http';
 import * as jwt from 'jsonwebtoken';
 
@@ -39,7 +39,7 @@ export class WebSocketService {
     });
 
     this.wss.on('error', (error) => {
-      this.fastify.log.error('WebSocket server error:', error);
+      this.fastify.log.error(`WebSocket server error:: ${error instanceof Error ? error.message : String(error)}`);
     });
   }
 
@@ -83,7 +83,7 @@ export class WebSocketService {
           const message = JSON.parse(data.toString());
           this.handleClientMessage(ws, message);
         } catch (error) {
-          this.fastify.log.error('Error parsing WebSocket message:', error);
+          this.fastify.log.error(`Error parsing WebSocket message:: ${error instanceof Error ? error.message : String(error)}`);
         }
       });
 
@@ -98,7 +98,7 @@ export class WebSocketService {
       });
 
     } catch (error) {
-      this.fastify.log.error('WebSocket authentication failed:', error);
+      this.fastify.log.error(`WebSocket authentication failed:: ${error instanceof Error ? error.message : String(error)}`);
       ws.close(1008, 'Authentication failed');
     }
   }

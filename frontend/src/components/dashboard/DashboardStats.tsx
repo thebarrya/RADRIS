@@ -20,13 +20,30 @@ interface DashboardStatsProps {
 
 export function DashboardStats({ stats, isLoading, error }: DashboardStatsProps) {
   if (error) {
+    const isAuthError = error.message.includes('401') || error.message.includes('unauthorized');
+    
     return (
       <Card className="bg-red-50 border-red-200">
         <CardContent className="flex items-center justify-center py-8">
           <div className="text-center">
             <AlertCircle className="w-12 h-12 text-red-500 mx-auto mb-4" />
-            <p className="text-red-700">Erreur lors du chargement des statistiques</p>
-            <p className="text-sm text-red-600 mt-1">{error.message}</p>
+            <p className="text-red-700 font-medium">
+              {isAuthError ? 'Erreur d\'authentification' : 'Erreur lors du chargement des statistiques'}
+            </p>
+            <p className="text-sm text-red-600 mt-1">
+              {isAuthError 
+                ? 'Veuillez vous reconnecter pour accéder aux statistiques'
+                : error.message
+              }
+            </p>
+            {isAuthError && (
+              <button 
+                onClick={() => window.location.href = '/auth/login'}
+                className="mt-3 px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 transition-colors"
+              >
+                Se reconnecter
+              </button>
+            )}
           </div>
         </CardContent>
       </Card>

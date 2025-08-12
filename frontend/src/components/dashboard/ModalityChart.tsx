@@ -116,7 +116,7 @@ export function ModalityChart({ data, isLoading, title }: ModalityChartProps) {
               style={{ backgroundColor: entry.color }}
             />
             <span className="text-gray-600 truncate">
-              {entry.payload.modality}: {entry.payload.count}
+              {entry.payload?.modality || entry.modality || 'N/A'}: {entry.payload?.count || entry.count || 0}
             </span>
           </div>
         ))}

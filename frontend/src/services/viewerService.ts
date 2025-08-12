@@ -58,7 +58,7 @@ export class ViewerService {
         viewerUrl = this.buildSimpleOHIFViewerUrl(examination.studyInstanceUID);
         windowTitle = `RADRIS Viewer - ${patientInfo.name} (${patientInfo.accessionNumber})`;
         
-        toast.info('Ouverture du visualiseur en mode simplifié');
+        toast.success('Ouverture du visualiseur en mode simplifié');
       }
 
       // Open viewer in new window
@@ -139,6 +139,9 @@ export class ViewerService {
     // Add data source name (uses static configuration from app-config.js)
     params.append('datasources', 'dicomweb');
     
+    // Add the DICOMweb URL (required for OHIF to know where to fetch data)
+    params.append('url', config.wadoRsRoot || 'http://localhost:8042/dicom-web');
+    
     // Add patient context for better UX
     params.append('patientName', `${config.patient.lastName}, ${config.patient.firstName}`);
     params.append('accessionNumber', config.accessionNumber);
@@ -152,7 +155,12 @@ export class ViewerService {
    * @returns string - Simple OHIF viewer URL
    */
   private static buildSimpleOHIFViewerUrl(studyInstanceUID: string): string {
-    return `${this.OHIF_BASE_URL}/viewer?StudyInstanceUIDs=${studyInstanceUID}&datasources=dicomweb`;
+    const params = new URLSearchParams();
+    params.append('StudyInstanceUIDs', studyInstanceUID);
+    params.append('datasources', 'dicomweb');
+    params.append('url', 'http://localhost:8042/dicom-web');
+    
+    return `${this.OHIF_BASE_URL}/viewer?${params.toString()}`;
   }
 
   /**

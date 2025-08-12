@@ -33,6 +33,36 @@ export default function PatientsPage() {
     sortOrder: 'asc' as 'asc' | 'desc',
   });
 
+  const fetchPatients = async () => {
+    try {
+      setIsLoading(true);
+      setError(null);
+      
+      let response;
+      if ((searchParams as any).isAdvancedSearch) {
+        // Use advanced search endpoint
+        const { isAdvancedSearch, ...searchData } = searchParams as any;
+        response = await patientsApi.search(searchData);
+      } else {
+        // Use regular search endpoint
+        response = await patientsApi.getAll(searchParams);
+      }
+      
+      setPatients(response.data.patients);
+      setPagination(response.data.pagination);
+    } catch (err: any) {
+      setError(err.response?.data?.error || 'Erreur lors du chargement des patients');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (session) {
+      fetchPatients();
+    }
+  }, [searchParams, session]);
+
   // Redirect if not authenticated
   if (status === 'loading') {
     return (
@@ -45,25 +75,6 @@ export default function PatientsPage() {
   if (!session) {
     redirect('/auth/login');
   }
-
-  const fetchPatients = async () => {
-    try {
-      setIsLoading(true);
-      setError(null);
-      
-      const response = await patientsApi.getAll(searchParams);
-      setPatients(response.data.patients);
-      setPagination(response.data.pagination);
-    } catch (err: any) {
-      setError(err.response?.data?.error || 'Erreur lors du chargement des patients');
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    fetchPatients();
-  }, [searchParams]);
 
   const handleSearch = (params: any) => {
     setSearchParams(prev => ({

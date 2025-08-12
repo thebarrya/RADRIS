@@ -1,0 +1,108 @@
+{
+  "Name": "RADRIS PACS",
+  "DicomAet": "RADRIS",
+  "DicomPort": 4242,
+  "HttpPort": 8042,
+  
+  "PostgreSQL": {
+    "Host": "postgres",
+    "Port": 5432,
+    "Database": "orthanc",
+    "Username": "radris",
+    "Password": "radris123",
+    "EnableIndex": true,
+    "EnableStorage": true
+  },
+
+
+  "DicomWeb": {
+    "Enable": true,
+    "Root": "/dicom-web/",
+    "EnableWado": true,
+    "WadoRoot": "/wado",
+    "Ssl": false,
+    "QidoCaseSensitive": false,
+    "Host": "0.0.0.0",
+    "Port": 8042,
+    "MetadataMode": "Full"
+  },
+
+  "Plugins": [
+    "/usr/share/orthanc/plugins/libOrthancDicomWeb.so",
+    "/usr/share/orthanc/plugins/libOrthancExplorer2.so",
+    "/usr/share/orthanc/plugins/libStoneWebViewer.so"
+  ],
+
+  "OrthancExplorer2": {
+    "Enable": true,
+    "IsDefaultUI": true,
+    "Theme": "dark",
+    "LogLevel": "default",
+    "EnableShares": true,
+    "ShowOrthancName": true,
+    "UiOptions": {
+      "EnableOpenInOhifViewer3": true,
+      "OhifViewer3PublicRoot": "http://localhost:3005/",
+      "StudyListColumns": [
+        "PatientName",
+        "PatientID", 
+        "StudyDate",
+        "StudyDescription",
+        "AccessionNumber"
+      ]
+    },
+    "Viewers": {
+      "OhifViewer3": {
+        "Enable": true,
+        "PublicRoot": "http://localhost:3005/viewer?datasources=dicomweb&url=http://localhost:8042/dicom-web",
+        "OpenNewTab": true,
+        "StudyInstanceUIDUrlParameter": "StudyInstanceUIDs"
+      },
+      "StoneWebViewer": {
+        "Enable": true
+      },
+      "VolView": {
+        "Enable": true
+      }
+    },
+    "StudyListContentScript": "window.oe2.setViewerUrl('ohif', 'http://localhost:3005/viewer?datasources=dicomweb&url=http://localhost:8042/dicom-web&StudyInstanceUIDs={{StudyInstanceUID}}');"
+  },
+
+  "HttpServerEnabled": true,
+  "HttpDescribeErrors": true,
+  "HttpCompressionEnabled": true,
+  "HttpRequestTimeout": 30,
+
+  "HttpHeaders": {
+    "Access-Control-Allow-Origin": "*",
+    "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
+    "Access-Control-Allow-Headers": "Content-Type, Authorization, Cache-Control, X-Requested-With",
+    "Access-Control-Allow-Credentials": "true"
+  },
+
+  "DicomServerEnabled": true,
+  "DicomAlwaysAllowEcho": true,
+  "DicomAlwaysAllowFind": true,
+  "DicomAlwaysAllowMove": true,
+  "DicomAlwaysAllowGet": true,
+  "DicomAlwaysAllowStore": true,
+
+  "RemoteAccessAllowed": true,
+  "AuthenticationEnabled": false,
+  "SslEnabled": false,
+
+  "LimitFindResults": 0,
+  "LimitFindInstances": 0,
+  "MaximumStorageSize": 0,
+  "MaximumPatientCount": 0,
+
+  "LogLevel": "default",
+  "ConcurrentJobs": 4,
+
+  "StorageDirectory": "/var/lib/orthanc/db",
+  "IndexDirectory": "/var/lib/orthanc/db",
+
+  "StoneWebViewer": {
+    "Enable": true
+  }
+}

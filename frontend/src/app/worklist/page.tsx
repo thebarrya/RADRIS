@@ -21,19 +21,7 @@ export default function WorklistPage() {
     sortOrder: 'desc',
   });
 
-  // Redirect if not authenticated
-  if (status === 'loading') {
-    return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-blue-600"></div>
-      </div>
-    );
-  }
-
-  if (!session) {
-    redirect('/auth/login');
-  }
-
+  // All hooks must be called before any conditional returns
   const {
     data: worklistData,
     isLoading,
@@ -41,7 +29,6 @@ export default function WorklistPage() {
     refetch
   } = useWorklist(params);
 
-  // WebSocket connection for real-time updates
   const { isConnected } = useWebSocket({
     onExaminationUpdate: (examination, updateType) => {
       console.log(`📊 ${updateType} examination:`, examination.accessionNumber);
@@ -70,6 +57,19 @@ export default function WorklistPage() {
   const handleRefresh = () => {
     refetch();
   };
+
+  // Redirect if not authenticated (after all hooks)
+  if (status === 'loading') {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-blue-600"></div>
+      </div>
+    );
+  }
+
+  if (!session) {
+    redirect('/auth/login');
+  }
 
   return (
     <AppLayout>

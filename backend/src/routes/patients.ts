@@ -226,10 +226,20 @@ export const patientRoutes: FastifyPluginAsync = async (fastify) => {
     const skip = (page - 1) * limit;
     const where: any = { active: true };
 
-    // Add text search conditions
+    // Add search conditions with proper field handling
     Object.entries(searchFields).forEach(([key, value]) => {
       if (value) {
-        where[key] = { contains: value, mode: 'insensitive' };
+        // Handle different field types appropriately
+        if (key === 'gender') {
+          // Enum field - exact match
+          where[key] = value;
+        } else if (key === 'birthDate') {
+          // Date field - exact match for specific date
+          where[key] = new Date(value);
+        } else {
+          // Text fields - case insensitive contains
+          where[key] = { contains: value, mode: 'insensitive' };
+        }
       }
     });
 

@@ -33,7 +33,7 @@ export function PatientSearch({ onSearch, searchParams }: PatientSearchProps) {
     onSearch({ query: value });
   };
 
-  const handleAdvancedSearch = () => {
+  const handleAdvancedSearch = async () => {
     const params: any = {};
     
     // Convert form data to API format
@@ -51,7 +51,8 @@ export function PatientSearch({ onSearch, searchParams }: PatientSearchProps) {
       if (advancedParams.ageRange.max) params.ageRange.max = parseInt(advancedParams.ageRange.max);
     }
     
-    // Use POST request for advanced search
+    // Mark as advanced search to use POST endpoint
+    params.isAdvancedSearch = true;
     onSearch(params);
   };
 

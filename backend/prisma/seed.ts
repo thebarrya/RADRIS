@@ -169,8 +169,10 @@ async function main() {
 
   const createdPatients = [];
   for (const patientData of patients) {
-    const patient = await prisma.patient.create({
-      data: {
+    const patient = await prisma.patient.upsert({
+      where: { socialSecurity: patientData.socialSecurity },
+      update: {},
+      create: {
         ...patientData,
         createdById: admin.id,
       },
@@ -360,8 +362,10 @@ async function main() {
     const examData = examinations[i];
     const accessionNumber = await generateAccessionNumber(i + 1);
     
-    const examination = await prisma.examination.create({
-      data: {
+    const examination = await prisma.examination.upsert({
+      where: { accessionNumber },
+      update: {},
+      create: {
         ...examData,
         accessionNumber,
         studyInstanceUID: examData.imagesAvailable ? `1.2.826.0.1.3680043.2.1143.${Date.now()}.${i + 1}` : undefined,

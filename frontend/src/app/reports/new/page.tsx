@@ -40,19 +40,7 @@ export default function NewReportPage() {
     recommendation: '',
   });
 
-  // Redirect if not authenticated
-  if (status === 'loading') {
-    return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-blue-600"></div>
-      </div>
-    );
-  }
-
-  if (!session) {
-    redirect('/auth/login');
-  }
-
+  // All hooks must be called before any conditional returns
   // Load examination if ID provided
   const { data: examination, isLoading: isLoadingExam } = useQuery({
     queryKey: ['examination', examinationId],
@@ -140,6 +128,19 @@ export default function NewReportPage() {
       recommendation: '',
     });
   };
+
+  // Redirect if not authenticated (after all hooks)
+  if (status === 'loading') {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-blue-600"></div>
+      </div>
+    );
+  }
+
+  if (!session) {
+    redirect('/auth/login');
+  }
 
   return (
     <AppLayout>

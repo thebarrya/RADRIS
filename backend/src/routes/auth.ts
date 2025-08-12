@@ -84,7 +84,7 @@ export const authRoutes: FastifyPluginAsync = async (fastify) => {
           role: user.role,
         },
       };
-    } catch (error) {
+    } catch (error: any) {
       fastify.log.error({ error: error.message, stack: error.stack }, 'Login error');
       
       if (error instanceof z.ZodError) {

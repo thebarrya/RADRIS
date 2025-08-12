@@ -179,8 +179,9 @@ export interface WorklistParams {
   modality?: string;
   priority?: string;
   assignedTo?: string;
-  dateFrom?: string;
-  dateTo?: string;
+  referrer?: string;
+  dateFrom?: Date;
+  dateTo?: Date;
   query?: string;
   sortBy?: string;
   sortOrder?: 'asc' | 'desc';

@@ -33,8 +33,6 @@ serverApi.interceptors.response.use(
 );
 
 // Request interceptor to add auth token
-// Temporarily disabled to debug NextAuth initialization issues
-/*
 api.interceptors.request.use(
   async (config) => {
     try {
@@ -52,7 +50,6 @@ api.interceptors.request.use(
     return Promise.reject(error);
   }
 );
-*/
 
 // Response interceptor for error handling
 api.interceptors.response.use(
@@ -184,7 +181,7 @@ export const dicomApi = {
     api.post(`/dicom/sync-examination/${examinationId}`),
   
   getViewerConfig: (examinationId: string) =>
-    api.get(`/dicom/viewer-config/${examinationId}`),
+    api.get(`/dicom/viewer/config/${examinationId}`),
 };
 
 export default api;

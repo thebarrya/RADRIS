@@ -15,7 +15,8 @@ import {
   User,
   Bell,
   ChevronDown,
-  Activity
+  Activity,
+  Layout
 } from 'lucide-react';
 import {
   DropdownMenu,
@@ -26,13 +27,26 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 
+interface NavigationItem {
+  name: string;
+  href: string;
+  icon: any;
+  roles: string[];
+  submenu?: {
+    name: string;
+    href: string;
+    icon: any;
+    roles?: string[];
+  }[];
+}
+
 export function MainNavigation() {
   const { data: session } = useSession();
   const pathname = usePathname();
 
   if (!session) return null;
 
-  const navigationItems = [
+  const navigationItems: NavigationItem[] = [
     {
       name: 'Tableau de bord',
       href: '/dashboard',
@@ -61,7 +75,20 @@ export function MainNavigation() {
       name: 'Rapports',
       href: '/reports',
       icon: FileText,
-      roles: ['ADMIN', 'RADIOLOGIST_SENIOR', 'RADIOLOGIST_JUNIOR']
+      roles: ['ADMIN', 'RADIOLOGIST_SENIOR', 'RADIOLOGIST_JUNIOR'],
+      submenu: [
+        {
+          name: 'Tous les rapports',
+          href: '/reports',
+          icon: FileText
+        },
+        {
+          name: 'Templates',
+          href: '/reports/templates',
+          icon: Layout,
+          roles: ['ADMIN', 'RADIOLOGIST_SENIOR']
+        }
+      ]
     },
     {
       name: 'Administration',
@@ -108,6 +135,44 @@ export function MainNavigation() {
                 const Icon = item.icon;
                 const active = isActive(item.href);
                 
+                // If item has submenu, render dropdown
+                if (item.submenu) {
+                  return (
+                    <DropdownMenu key={item.name}>
+                      <DropdownMenuTrigger asChild>
+                        <Button
+                          variant="ghost"
+                          className={`flex items-center space-x-2 px-3 py-2 rounded-md text-sm font-medium transition-colors ${
+                            active
+                              ? 'bg-blue-100 text-blue-700 border border-blue-200'
+                              : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
+                          }`}
+                        >
+                          <Icon className="w-4 h-4" />
+                          <span>{item.name}</span>
+                          <ChevronDown className="w-3 h-3" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="start">
+                        {item.submenu
+                          .filter(subItem => !subItem.roles || subItem.roles.includes(session.user?.role || 'SECRETARY'))
+                          .map((subItem) => {
+                            const SubIcon = subItem.icon;
+                            return (
+                              <DropdownMenuItem key={subItem.name} asChild>
+                                <Link href={subItem.href} className="flex items-center space-x-2">
+                                  <SubIcon className="w-4 h-4" />
+                                  <span>{subItem.name}</span>
+                                </Link>
+                              </DropdownMenuItem>
+                            );
+                          })}
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  );
+                }
+                
+                // Regular navigation item
                 return (
                   <Link
                     key={item.name}
