@@ -163,19 +163,52 @@ export class DicomService {
     return response.data.data;
   }
 
+  static async getOrthancIdFromStudyUID(studyInstanceUID: string): Promise<string | null> {
+    try {
+      const response = await fetch('http://localhost:8042/studies');
+      const studyIds = await response.json();
+      
+      for (const studyId of studyIds) {
+        const studyResponse = await fetch(`http://localhost:8042/studies/${studyId}`);
+        const studyData = await studyResponse.json();
+        
+        if (studyData.MainDicomTags?.StudyInstanceUID === studyInstanceUID) {
+          return studyId;
+        }
+      }
+      
+      return null;
+    } catch (error) {
+      console.error('Error mapping StudyInstanceUID to Orthanc ID:', error);
+      return null;
+    }
+  }
+
   static openOhifViewer(studyInstanceUID: string): void {
-    const ohifUrl = `http://localhost:3005/viewer?datasources=dicomweb&StudyInstanceUIDs=${studyInstanceUID}`;
+    const ohifUrl = `http://localhost:3005/viewer?datasources=dicomweb&StudyInstanceUIDs=${studyInstanceUID}&url=http://localhost:8042/dicom-web`;
     window.open(ohifUrl, '_blank', 'width=1200,height=800,scrollbars=yes,resizable=yes');
   }
 
-  static openOrthancViewer(studyInstanceUID: string): void {
-    const orthancUrl = `http://localhost:8042/app/explorer.html#study?uuid=${studyInstanceUID}`;
-    window.open(orthancUrl, '_blank', 'width=1200,height=800,scrollbars=yes,resizable=yes');
+  static async openOrthancViewer(studyInstanceUID: string): Promise<void> {
+    const orthancId = await this.getOrthancIdFromStudyUID(studyInstanceUID);
+    if (orthancId) {
+      const orthancUrl = `http://localhost:8042/app/explorer.html#study?uuid=${orthancId}`;
+      window.open(orthancUrl, '_blank', 'width=1200,height=800,scrollbars=yes,resizable=yes');
+    } else {
+      console.error('Could not find Orthanc ID for StudyInstanceUID:', studyInstanceUID);
+      alert('Impossible de trouver l\'étude dans Orthanc PACS');
+    }
   }
 
-  static openStoneViewer(studyInstanceUID: string): void {
-    const stoneUrl = `http://localhost:8042/ui/app/stone-webviewer/index.html?study=${studyInstanceUID}`;
-    window.open(stoneUrl, '_blank', 'width=1200,height=800,scrollbars=yes,resizable=yes');
+  static async openStoneViewer(studyInstanceUID: string): Promise<void> {
+    const orthancId = await this.getOrthancIdFromStudyUID(studyInstanceUID);
+    if (orthancId) {
+      const stoneUrl = `http://localhost:8042/ui/app/stone-webviewer/index.html?study=${orthancId}`;
+      window.open(stoneUrl, '_blank', 'width=1200,height=800,scrollbars=yes,resizable=yes');
+    } else {
+      console.error('Could not find Orthanc ID for StudyInstanceUID:', studyInstanceUID);
+      alert('Impossible de trouver l\'étude dans Orthanc PACS');
+    }
   }
 
   // Utility methods
