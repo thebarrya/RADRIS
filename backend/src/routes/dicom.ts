@@ -2,15 +2,12 @@ import { FastifyPluginAsync } from 'fastify';
 import { z } from 'zod';
 import { dicomService } from '../services/dicom.js';
 import { dicomSyncService } from '../services/dicomSync.js';
+import { metadataSyncService } from '../services/metadataSync.js';
+import { createDicomMonitor, getDicomMonitor } from '../services/dicomMonitor.js';
+import { createAuthHandler } from '../utils/auth.js';
 
 export const dicomRoutes: FastifyPluginAsync = async (fastify) => {
-  const authenticate = async (request: any, reply: any) => {
-    try {
-      await request.jwtVerify();
-    } catch (err) {
-      reply.send(err);
-    }
-  };
+  const authenticate = createAuthHandler();
 
   // Test Orthanc connectivity
   fastify.get('/echo', { preHandler: authenticate }, async () => {
@@ -103,7 +100,7 @@ export const dicomRoutes: FastifyPluginAsync = async (fastify) => {
       // Build viewer configuration
       const config = {
         studyInstanceUID: examination.studyInstanceUID,
-        wadoRsRoot: 'http://localhost:8042/dicom-web',
+        wadoRsRoot: 'http://localhost:8043/dicom-web',
         ohifViewerUrl: 'http://localhost:3005',
         orthancViewerUrl: 'http://localhost:8042/orthanc-explorer-2',
         stoneViewerUrl: 'http://localhost:8042/stone-webviewer',
@@ -454,6 +451,529 @@ export const dicomRoutes: FastifyPluginAsync = async (fastify) => {
         error: error instanceof Error ? error.message : 'Failed to get viewer configuration',
         examinationId
       };
+    }
+  });
+
+  // Get study images for Cornerstone viewer
+  fastify.get('/study-images/:studyInstanceUID', { preHandler: authenticate }, async (request) => {
+    const { studyInstanceUID } = request.params as { studyInstanceUID: string };
+
+    try {
+      const orthancUrl = process.env.ORTHANC_URL || 'http://orthanc:8042';
+      
+      // First, get all studies from Orthanc
+      const studiesResponse = await fetch(`${orthancUrl}/studies`);
+      if (!studiesResponse.ok) {
+        throw new Error('Failed to fetch studies from Orthanc');
+      }
+      
+      const studyIds = await studiesResponse.json();
+      let orthancStudyId = null;
+      
+      // Find the Orthanc study ID that matches our StudyInstanceUID
+      for (const id of studyIds as string[]) {
+        const studyResponse = await fetch(`${orthancUrl}/studies/${id}`);
+        if (studyResponse.ok) {
+          const studyData = await studyResponse.json() as any;
+          if (studyData.MainDicomTags?.StudyInstanceUID === studyInstanceUID) {
+            orthancStudyId = id;
+            break;
+          }
+        }
+      }
+      
+      if (!orthancStudyId) {
+        return {
+          success: false,
+          error: `Study not found in Orthanc: ${studyInstanceUID}`,
+          imageIds: []
+        };
+      }
+      
+      // Get all series in the study
+      const seriesResponse = await fetch(`${orthancUrl}/studies/${orthancStudyId}/series`);
+      if (!seriesResponse.ok) {
+        throw new Error('Failed to fetch series');
+      }
+      
+      const seriesData = await seriesResponse.json();
+      const imageIds: string[] = [];
+      
+      // Get all instances from all series
+      for (const seriesId of seriesData as string[]) {
+        // Get instances for each series
+        const instancesResponse = await fetch(`${orthancUrl}/series/${seriesId}/instances`);
+        if (instancesResponse.ok) {
+          const instances = await instancesResponse.json() as string[];
+          
+          // Create image IDs for each instance using direct Orthanc access
+          for (const instanceId of instances) {
+            // Use direct Orthanc URL that should work with CORS headers already configured
+            const orthancDirectUrl = process.env.NEXT_PUBLIC_ORTHANC_URL || 'http://localhost:8042';
+            const imageId = `wadouri:${orthancDirectUrl}/instances/${instanceId}/file`;
+            imageIds.push(imageId);
+          }
+        }
+      }
+      
+      if (imageIds.length === 0) {
+        return {
+          success: false,
+          error: 'No images found in study',
+          imageIds: []
+        };
+      }
+      
+      return {
+        success: true,
+        studyInstanceUID,
+        orthancStudyId,
+        imageIds,
+        imageCount: imageIds.length,
+        timestamp: new Date().toISOString()
+      };
+      
+    } catch (error) {
+      fastify.log.error(`Study images error: ${error instanceof Error ? error.message : String(error)}`);
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Failed to load study images',
+        imageIds: []
+      };
+    }
+  });
+
+  // Proxy endpoint for DICOM instances (CORS-safe)
+  fastify.get('/proxy/instances/:instanceId/file', async (request, reply) => {
+    const { instanceId } = request.params as { instanceId: string };
+    
+    try {
+      const orthancUrl = process.env.ORTHANC_URL || 'http://orthanc:8042';
+      const instanceUrl = `${orthancUrl}/instances/${instanceId}/file`;
+      
+      const response = await fetch(instanceUrl);
+      if (!response.ok) {
+        reply.code(response.status);
+        return { error: 'Failed to fetch DICOM instance' };
+      }
+      
+      // Set appropriate CORS headers
+      reply.header('Access-Control-Allow-Origin', '*');
+      reply.header('Access-Control-Allow-Methods', 'GET, HEAD, OPTIONS');
+      reply.header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+      reply.header('Content-Type', response.headers.get('content-type') || 'application/dicom');
+      
+      // Stream the DICOM file
+      const buffer = await response.arrayBuffer();
+      return reply.send(Buffer.from(buffer));
+      
+    } catch (error) {
+      fastify.log.error(`Proxy instance error: ${error instanceof Error ? error.message : String(error)}`);
+      reply.code(500);
+      return { error: 'Failed to proxy DICOM instance' };
+    }
+  });
+
+  // Add annotations endpoint  
+  fastify.get('/examinations/:examinationId/annotations', { preHandler: authenticate }, async (request) => {
+    const { examinationId } = request.params as { examinationId: string };
+    
+    try {
+      // For now, return empty annotations as the feature is being developed
+      return {
+        success: true,
+        annotations: [],
+        examinationId,
+        timestamp: new Date().toISOString()
+      };
+    } catch (error) {
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Failed to get annotations',
+        annotations: []
+      };
+    }
+  });
+
+  // Auto-discovery endpoints
+  fastify.post('/auto-discovery/discover', { preHandler: authenticate }, async () => {
+    try {
+      const result = await dicomSyncService.discoverNewStudies();
+      
+      return {
+        success: true,
+        message: `Discovery complete: ${result.matchedExaminations} examinations matched to new studies`,
+        data: {
+          newStudiesFound: result.newStudiesFound,
+          matchedExaminations: result.matchedExaminations,
+          unmatchedStudies: result.unmatchedStudies.length,
+          syncResults: result.syncResults
+        },
+        timestamp: new Date().toISOString()
+      };
+    } catch (error) {
+      fastify.log.error(`Auto-discovery error: ${error instanceof Error ? error.message : String(error)}`);
+      throw new Error('Failed to run auto-discovery');
+    }
+  });
+
+  fastify.post('/auto-discovery/scheduled', { preHandler: authenticate }, async () => {
+    try {
+      const result = await dicomSyncService.runScheduledAutoDiscovery();
+      
+      return {
+        success: result.success,
+        message: result.success 
+          ? `Scheduled discovery completed successfully`
+          : `Scheduled discovery failed: ${result.error}`,
+        data: result.discoveryResult,
+        timestamp: result.timestamp
+      };
+    } catch (error) {
+      fastify.log.error(`Scheduled auto-discovery error: ${error instanceof Error ? error.message : String(error)}`);
+      throw new Error('Failed to run scheduled auto-discovery');
+    }
+  });
+
+  // Get unmatched studies (studies in Orthanc without corresponding examinations)
+  fastify.get('/auto-discovery/unmatched-studies', { preHandler: authenticate }, async () => {
+    try {
+      const result = await dicomSyncService.discoverNewStudies();
+      
+      return {
+        success: true,
+        data: {
+          unmatchedStudies: result.unmatchedStudies,
+          count: result.unmatchedStudies.length
+        },
+        timestamp: new Date().toISOString()
+      };
+    } catch (error) {
+      fastify.log.error(`Get unmatched studies error: ${error instanceof Error ? error.message : String(error)}`);
+      throw new Error('Failed to get unmatched studies');
+    }
+  });
+
+  // Manual linking endpoint (for unmatched studies)
+  fastify.post('/auto-discovery/manual-link', { preHandler: authenticate }, async (request) => {
+    const bodySchema = z.object({
+      studyInstanceUID: z.string(),
+      examinationId: z.string()
+    });
+
+    const { studyInstanceUID, examinationId } = bodySchema.parse(request.body);
+
+    try {
+      // Check if examination exists and is not already linked
+      const examination = await fastify.prisma.examination.findUnique({
+        where: { id: examinationId },
+        select: { studyInstanceUID: true }
+      });
+
+      if (!examination) {
+        throw new Error('Examination not found');
+      }
+
+      if (examination.studyInstanceUID) {
+        throw new Error('Examination is already linked to a study');
+      }
+
+      // Update examination with study
+      await fastify.prisma.examination.update({
+        where: { id: examinationId },
+        data: {
+          studyInstanceUID,
+          imagesAvailable: true,
+          status: 'ACQUIRED',
+          updatedAt: new Date()
+        }
+      });
+
+      return {
+        success: true,
+        message: 'Study successfully linked to examination',
+        data: {
+          examinationId,
+          studyInstanceUID
+        },
+        timestamp: new Date().toISOString()
+      };
+    } catch (error) {
+      fastify.log.error(`Manual link error: ${error instanceof Error ? error.message : String(error)}`);
+      throw new Error(`Failed to link study to examination: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  });
+
+  // Metadata synchronization endpoints
+  fastify.post('/metadata-sync/synchronize', { preHandler: authenticate }, async () => {
+    try {
+      // Inject WebSocket service if available
+      if (fastify.websocket && !metadataSyncService['websocket']) {
+        metadataSyncService['websocket'] = fastify.websocket;
+      }
+      
+      const result = await metadataSyncService.synchronizeMetadata();
+      
+      return {
+        success: result.success,
+        message: result.success 
+          ? `Metadata sync completed: ${result.patientsUpdated} patients updated, ${result.studiesLinked} studies linked`
+          : `Metadata sync failed with ${result.errors.length} errors`,
+        data: {
+          patientsProcessed: result.patientsProcessed,
+          patientsUpdated: result.patientsUpdated,
+          studiesProcessed: result.studiesProcessed,
+          studiesLinked: result.studiesLinked,
+          errors: result.errors.slice(0, 10), // Limit errors in response
+          totalErrors: result.errors.length
+        },
+        timestamp: result.timestamp.toISOString()
+      };
+    } catch (error) {
+      fastify.log.error(`Metadata sync error: ${error instanceof Error ? error.message : String(error)}`);
+      throw new Error('Failed to run metadata synchronization');
+    }
+  });
+
+  fastify.get('/metadata-sync/statistics', { preHandler: authenticate }, async () => {
+    try {
+      const stats = await metadataSyncService.getSyncStatistics();
+      
+      return {
+        success: true,
+        data: stats,
+        timestamp: stats.timestamp
+      };
+    } catch (error) {
+      fastify.log.error(`Metadata sync stats error: ${error instanceof Error ? error.message : String(error)}`);
+      throw new Error('Failed to get metadata synchronization statistics');
+    }
+  });
+
+  // Bulk metadata operations
+  fastify.post('/metadata-sync/sync-patients', { preHandler: authenticate }, async () => {
+    try {
+      // This would call a specific patient sync method
+      const result = await metadataSyncService.synchronizeMetadata();
+      
+      return {
+        success: result.success,
+        message: `Patient sync completed: ${result.patientsUpdated}/${result.patientsProcessed} patients updated`,
+        data: {
+          patientsProcessed: result.patientsProcessed,
+          patientsUpdated: result.patientsUpdated,
+          errors: result.errors.filter(e => e.includes('patient')).slice(0, 5)
+        },
+        timestamp: new Date().toISOString()
+      };
+    } catch (error) {
+      fastify.log.error(`Patient sync error: ${error instanceof Error ? error.message : String(error)}`);
+      throw new Error('Failed to sync patient metadata');
+    }
+  });
+
+  fastify.post('/metadata-sync/sync-studies', { preHandler: authenticate }, async () => {
+    try {
+      // This would call a specific study sync method
+      const result = await metadataSyncService.synchronizeMetadata();
+      
+      return {
+        success: result.success,
+        message: `Study sync completed: ${result.studiesLinked}/${result.studiesProcessed} studies linked`,
+        data: {
+          studiesProcessed: result.studiesProcessed,
+          studiesLinked: result.studiesLinked,
+          errors: result.errors.filter(e => e.includes('study')).slice(0, 5)
+        },
+        timestamp: new Date().toISOString()
+      };
+    } catch (error) {
+      fastify.log.error(`Study sync error: ${error instanceof Error ? error.message : String(error)}`);
+      throw new Error('Failed to sync study metadata');
+    }
+  });
+
+  // Validation and health check for metadata sync
+  fastify.get('/metadata-sync/health', { preHandler: authenticate }, async () => {
+    try {
+      const [risHealth, pacsHealth] = await Promise.all([
+        // Check RIS database connectivity
+        fastify.prisma.patient.count().then(() => true).catch(() => false),
+        // Check PACS connectivity  
+        dicomService.testConnection()
+      ]);
+
+      const isHealthy = risHealth && pacsHealth;
+      
+      return {
+        success: isHealthy,
+        data: {
+          ris: {
+            connected: risHealth,
+            status: risHealth ? 'healthy' : 'disconnected'
+          },
+          pacs: {
+            connected: pacsHealth,
+            status: pacsHealth ? 'healthy' : 'disconnected'
+          },
+          overall: {
+            status: isHealthy ? 'healthy' : 'degraded',
+            readyForSync: isHealthy
+          }
+        },
+        timestamp: new Date().toISOString()
+      };
+    } catch (error) {
+      fastify.log.error(`Metadata sync health check error: ${error instanceof Error ? error.message : String(error)}`);
+      throw new Error('Failed to check metadata sync health');
+    }
+  });
+
+  // DICOM monitoring endpoints
+  
+  // Initialize DICOM monitor
+  fastify.post('/monitor/initialize', { preHandler: authenticate }, async () => {
+    try {
+      const monitor = createDicomMonitor(fastify.websocket);
+      
+      return {
+        success: true,
+        message: 'DICOM monitor initialized',
+        status: monitor.getStatus(),
+        timestamp: new Date().toISOString()
+      };
+    } catch (error) {
+      fastify.log.error(`DICOM monitor initialization error: ${error instanceof Error ? error.message : String(error)}`);
+      throw new Error('Failed to initialize DICOM monitor');
+    }
+  });
+
+  // Start DICOM monitoring
+  fastify.post('/monitor/start', { preHandler: authenticate }, async () => {
+    try {
+      const monitor = getDicomMonitor() || createDicomMonitor(fastify.websocket);
+      await monitor.startMonitoring();
+      
+      return {
+        success: true,
+        message: 'DICOM monitoring started',
+        status: monitor.getStatus(),
+        timestamp: new Date().toISOString()
+      };
+    } catch (error) {
+      fastify.log.error(`DICOM monitor start error: ${error instanceof Error ? error.message : String(error)}`);
+      throw new Error('Failed to start DICOM monitoring');
+    }
+  });
+
+  // Stop DICOM monitoring
+  fastify.post('/monitor/stop', { preHandler: authenticate }, async () => {
+    try {
+      const monitor = getDicomMonitor();
+      if (monitor) {
+        monitor.stopMonitoring();
+        
+        return {
+          success: true,
+          message: 'DICOM monitoring stopped',
+          status: monitor.getStatus(),
+          timestamp: new Date().toISOString()
+        };
+      } else {
+        return {
+          success: false,
+          message: 'DICOM monitor not initialized',
+          timestamp: new Date().toISOString()
+        };
+      }
+    } catch (error) {
+      fastify.log.error(`DICOM monitor stop error: ${error instanceof Error ? error.message : String(error)}`);
+      throw new Error('Failed to stop DICOM monitoring');
+    }
+  });
+
+  // Get DICOM monitor status
+  fastify.get('/monitor/status', { preHandler: authenticate }, async () => {
+    try {
+      const monitor = getDicomMonitor();
+      
+      if (monitor) {
+        return {
+          success: true,
+          data: monitor.getStatus(),
+          timestamp: new Date().toISOString()
+        };
+      } else {
+        return {
+          success: true,
+          data: {
+            monitoring: false,
+            knownStudiesCount: 0,
+            checkInterval: 0,
+            lastCheck: null,
+            message: 'Monitor not initialized'
+          },
+          timestamp: new Date().toISOString()
+        };
+      }
+    } catch (error) {
+      fastify.log.error(`DICOM monitor status error: ${error instanceof Error ? error.message : String(error)}`);
+      throw new Error('Failed to get DICOM monitor status');
+    }
+  });
+
+  // Manually trigger study check
+  fastify.post('/monitor/check', { preHandler: authenticate }, async () => {
+    try {
+      const monitor = getDicomMonitor();
+      
+      if (!monitor) {
+        throw new Error('DICOM monitor not initialized');
+      }
+
+      const newStudiesCount = await monitor.checkNow();
+      
+      return {
+        success: true,
+        message: `Manual check completed, found ${newStudiesCount} new studies`,
+        data: {
+          newStudiesFound: newStudiesCount,
+          status: monitor.getStatus()
+        },
+        timestamp: new Date().toISOString()
+      };
+    } catch (error) {
+      fastify.log.error(`DICOM monitor manual check error: ${error instanceof Error ? error.message : String(error)}`);
+      throw new Error('Failed to perform manual check');
+    }
+  });
+
+  // Configure monitoring interval
+  fastify.post('/monitor/configure', { preHandler: authenticate }, async (request) => {
+    const configSchema = z.object({
+      checkIntervalSeconds: z.number().min(1).max(3600)
+    });
+
+    const { checkIntervalSeconds } = configSchema.parse(request.body);
+
+    try {
+      const monitor = getDicomMonitor();
+      
+      if (!monitor) {
+        throw new Error('DICOM monitor not initialized');
+      }
+
+      monitor.setCheckInterval(checkIntervalSeconds * 1000);
+      
+      return {
+        success: true,
+        message: `DICOM monitoring interval updated to ${checkIntervalSeconds} seconds`,
+        status: monitor.getStatus(),
+        timestamp: new Date().toISOString()
+      };
+    } catch (error) {
+      fastify.log.error(`DICOM monitor configuration error: ${error instanceof Error ? error.message : String(error)}`);
+      throw new Error('Failed to configure DICOM monitor');
     }
   });
 };

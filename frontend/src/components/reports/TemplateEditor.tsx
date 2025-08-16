@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import { useNavigation } from '@/hooks/useNavigation';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -83,7 +83,7 @@ export default function TemplateEditor({
   onCancel, 
   className 
 }: TemplateEditorProps) {
-  const router = useRouter();
+  const { navigateTo } = useNavigation();
   const [formData, setFormData] = useState<TemplateFormData>({
     name: '',
     modality: '',
@@ -210,7 +210,7 @@ export default function TemplateEditor({
       onSave?.(templateData);
       
       // Navigate back or show success message
-      router.push('/reports/templates');
+      navigateTo('/reports/templates');
     } catch (error) {
       console.error('Error saving template:', error);
     } finally {
@@ -222,11 +222,11 @@ export default function TemplateEditor({
     if (hasUnsavedChanges()) {
       if (confirm('You have unsaved changes. Are you sure you want to cancel?')) {
         onCancel?.();
-        router.back();
+        navigateTo('/reports/templates');
       }
     } else {
       onCancel?.();
-      router.back();
+      navigateTo('/reports/templates');
     }
   };
 

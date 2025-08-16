@@ -1,9 +1,10 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useSearchParams } from 'next/navigation';
 import { useSession } from 'next-auth/react';
 import { redirect } from 'next/navigation';
+import { useNavigation } from '@/hooks/useNavigation';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -24,7 +25,7 @@ import { cn } from '@/lib/utils';
 import Link from 'next/link';
 
 export default function NewReportPage() {
-  const router = useRouter();
+  const { navigateTo } = useNavigation();
   const searchParams = useSearchParams();
   const { data: session, status } = useSession();
   const queryClient = useQueryClient();
@@ -94,7 +95,7 @@ export default function NewReportPage() {
     },
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['reports'] });
-      router.push(`/reports/${data.report.id}/edit`);
+      navigateTo(`/reports/${data.report.id}/edit`);
     },
     onError: (error: any) => {
       console.error('Error creating report:', error);
@@ -151,7 +152,7 @@ export default function NewReportPage() {
             <div className="flex items-center justify-between">
               <div className="flex items-center space-x-4">
                 <Button variant="ghost" size="sm" asChild>
-                  <Link href="/reports" className="flex items-center space-x-1">
+                  <Link href="/reports" prefetch={true} className="flex items-center space-x-1">
                     <ArrowLeft className="w-4 h-4" />
                     <span>Retour</span>
                   </Link>

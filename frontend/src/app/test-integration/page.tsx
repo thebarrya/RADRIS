@@ -65,7 +65,7 @@ export default function TestIntegrationPage() {
 
   const openOhifViewer = (studyInstanceUID: string) => {
     // OHIF viewer with study parameter
-    window.open(`http://localhost:3005?StudyInstanceUIDs=${studyInstanceUID}`, '_blank');
+    window.open(`http://localhost:3005/viewer?StudyInstanceUIDs=${studyInstanceUID}`, '_blank');
   };
 
   if (loading) {

@@ -16,10 +16,14 @@ export const authOptions: NextAuthOptions = {
         }
 
         try {
-          // Use explicit backend URL - ensure we're using the correct Docker network hostname
-          const backendUrl = process.env.INTERNAL_API_URL || 'http://localhost:3001/api';
+          // Use explicit backend URL - in Docker environment, always use service name
+          // Since NextAuth authorize runs on the server side, it's always in Docker context
+          const backendUrl = 'http://backend:3001/api';
           
-          const response = await fetch(`${backendUrl}/auth/login`, {
+          const loginUrl = `${backendUrl}/auth/login`;
+          console.log('🔐 Attempting login to:', loginUrl);
+          
+          const response = await fetch(loginUrl, {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
@@ -30,12 +34,21 @@ export const authOptions: NextAuthOptions = {
             }),
           });
 
+          console.log('📡 Login response status:', response.status);
+
           if (!response.ok) {
-            console.error('Backend login failed:', response.status, response.statusText);
+            const errorText = await response.text();
+            console.error('❌ Backend login failed:', response.status, errorText);
             return null;
           }
 
           const data = await response.json();
+          console.log('✅ Login response data:', { 
+            hasToken: !!data.token, 
+            hasUser: !!data.user,
+            userRole: data.user?.role 
+          });
+          
           const { token, user } = data;
 
           if (token && user) {

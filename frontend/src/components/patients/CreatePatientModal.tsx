@@ -5,12 +5,35 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card } from '@/components/ui/card';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { MedicalHistoryManager } from './MedicalHistoryManager';
+import { AllergyManager } from './AllergyManager';
 import { patientsApi } from '@/lib/api';
 import toast from 'react-hot-toast';
 
 interface CreatePatientModalProps {
   onClose: () => void;
   onPatientCreated: () => void;
+}
+
+interface MedicalCondition {
+  id: string;
+  name: string;
+  category: string;
+  severity: 'mild' | 'moderate' | 'severe';
+  diagnosisDate?: string;
+  notes?: string;
+  status: 'active' | 'resolved' | 'chronic';
+}
+
+interface Allergy {
+  id: string;
+  name: string;
+  type: 'medication' | 'food' | 'environmental' | 'contrast' | 'other';
+  severity: 'mild' | 'moderate' | 'severe' | 'life-threatening';
+  reaction?: string;
+  notes?: string;
+  verifiedDate?: string;
 }
 
 interface PatientFormData {
@@ -26,8 +49,8 @@ interface PatientFormData {
   socialSecurity: string;
   insuranceNumber: string;
   emergencyContact: string;
-  allergies: string[];
-  medicalHistory: string[];
+  allergies: Allergy[];
+  medicalHistory: MedicalCondition[];
   warnings: string[];
 }
 
@@ -51,9 +74,8 @@ export function CreatePatientModal({ onClose, onPatientCreated }: CreatePatientM
     warnings: [],
   });
 
-  const [allergyInput, setAllergyInput] = useState('');
-  const [medicalHistoryInput, setMedicalHistoryInput] = useState('');
   const [warningType, setWarningType] = useState('');
+  const [activeTab, setActiveTab] = useState('basic');
 
   const handleInputChange = (field: keyof PatientFormData, value: string) => {
     setFormData(prev => ({
@@ -62,38 +84,12 @@ export function CreatePatientModal({ onClose, onPatientCreated }: CreatePatientM
     }));
   };
 
-  const addAllergy = () => {
-    if (allergyInput.trim()) {
-      setFormData(prev => ({
-        ...prev,
-        allergies: [...prev.allergies, allergyInput.trim()]
-      }));
-      setAllergyInput('');
-    }
+  const handleAllergiesChange = (allergies: Allergy[]) => {
+    setFormData(prev => ({ ...prev, allergies }));
   };
 
-  const removeAllergy = (index: number) => {
-    setFormData(prev => ({
-      ...prev,
-      allergies: prev.allergies.filter((_, i) => i !== index)
-    }));
-  };
-
-  const addMedicalHistory = () => {
-    if (medicalHistoryInput.trim()) {
-      setFormData(prev => ({
-        ...prev,
-        medicalHistory: [...prev.medicalHistory, medicalHistoryInput.trim()]
-      }));
-      setMedicalHistoryInput('');
-    }
-  };
-
-  const removeMedicalHistory = (index: number) => {
-    setFormData(prev => ({
-      ...prev,
-      medicalHistory: prev.medicalHistory.filter((_, i) => i !== index)
-    }));
+  const handleMedicalHistoryChange = (medicalHistory: MedicalCondition[]) => {
+    setFormData(prev => ({ ...prev, medicalHistory }));
   };
 
   const addWarning = () => {
@@ -158,6 +154,9 @@ export function CreatePatientModal({ onClose, onPatientCreated }: CreatePatientM
         socialSecurity: formData.socialSecurity || undefined,
         insuranceNumber: formData.insuranceNumber || undefined,
         emergencyContact: formData.emergencyContact || undefined,
+        // Convert structured data to simple arrays for API compatibility
+        allergies: formData.allergies.map(a => `${a.name} (${a.severity})`),
+        medicalHistory: formData.medicalHistory.map(m => `${m.name} - ${m.category}`),
       };
       
       await patientsApi.create(patientData);
@@ -173,8 +172,8 @@ export function CreatePatientModal({ onClose, onPatientCreated }: CreatePatientM
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <Card className="w-full max-w-4xl max-h-[90vh] overflow-y-auto">
-        <div className="p-6">
+      <Card className="w-full max-w-6xl max-h-[95vh] overflow-hidden">
+        <div className="p-6 h-full flex flex-col">
           <div className="flex items-center justify-between mb-6">
             <h2 className="text-2xl font-bold text-gray-900">Nouveau Patient</h2>
             <Button variant="ghost" onClick={onClose}>
@@ -182,292 +181,275 @@ export function CreatePatientModal({ onClose, onPatientCreated }: CreatePatientM
             </Button>
           </div>
 
-          <form onSubmit={handleSubmit} className="space-y-6">
-            {/* Basic Information */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div>
-                <Label htmlFor="lastName">Nom *</Label>
-                <Input
-                  id="lastName"
-                  type="text"
-                  value={formData.lastName}
-                  onChange={(e) => handleInputChange('lastName', e.target.value)}
-                  className="mt-2"
-                  required
-                />
-              </div>
+          <form onSubmit={handleSubmit} className="flex-1 flex flex-col">
+            <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 flex flex-col">
+              <TabsList className="grid w-full grid-cols-4">
+                <TabsTrigger value="basic">Informations de base</TabsTrigger>
+                <TabsTrigger value="contact">Contact & Assurance</TabsTrigger>
+                <TabsTrigger value="medical">Antécédents médicaux</TabsTrigger>
+                <TabsTrigger value="allergies">Allergies & Alertes</TabsTrigger>
+              </TabsList>
+              
+              <div className="flex-1 overflow-y-auto mt-4">
+                <TabsContent value="basic" className="space-y-6 mt-0">
+                  {/* Basic Information */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div>
+                      <Label htmlFor="lastName">Nom *</Label>
+                      <Input
+                        id="lastName"
+                        type="text"
+                        value={formData.lastName}
+                        onChange={(e) => handleInputChange('lastName', e.target.value)}
+                        className="mt-2"
+                        required
+                      />
+                    </div>
 
-              <div>
-                <Label htmlFor="firstName">Prénom *</Label>
-                <Input
-                  id="firstName"
-                  type="text"
-                  value={formData.firstName}
-                  onChange={(e) => handleInputChange('firstName', e.target.value)}
-                  className="mt-2"
-                  required
-                />
-              </div>
+                    <div>
+                      <Label htmlFor="firstName">Prénom *</Label>
+                      <Input
+                        id="firstName"
+                        type="text"
+                        value={formData.firstName}
+                        onChange={(e) => handleInputChange('firstName', e.target.value)}
+                        className="mt-2"
+                        required
+                      />
+                    </div>
 
-              <div>
-                <Label htmlFor="birthDate">Date de naissance *</Label>
-                <Input
-                  id="birthDate"
-                  type="date"
-                  value={formData.birthDate}
-                  onChange={(e) => handleInputChange('birthDate', e.target.value)}
-                  className="mt-2"
-                  required
-                />
-              </div>
+                    <div>
+                      <Label htmlFor="birthDate">Date de naissance *</Label>
+                      <Input
+                        id="birthDate"
+                        type="date"
+                        value={formData.birthDate}
+                        onChange={(e) => handleInputChange('birthDate', e.target.value)}
+                        className="mt-2"
+                        required
+                      />
+                    </div>
 
-              <div>
-                <Label htmlFor="gender">Genre *</Label>
-                <select
-                  id="gender"
-                  value={formData.gender}
-                  onChange={(e) => handleInputChange('gender', e.target.value as 'M' | 'F' | 'OTHER')}
-                  className="mt-2 w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  required
-                >
-                  <option value="M">Homme</option>
-                  <option value="F">Femme</option>
-                  <option value="OTHER">Autre</option>
-                </select>
-              </div>
-            </div>
+                    <div>
+                      <Label htmlFor="gender">Genre *</Label>
+                      <select
+                        id="gender"
+                        value={formData.gender}
+                        onChange={(e) => handleInputChange('gender', e.target.value as 'M' | 'F' | 'OTHER')}
+                        className="mt-2 w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        required
+                      >
+                        <option value="M">Homme</option>
+                        <option value="F">Femme</option>
+                        <option value="OTHER">Autre</option>
+                      </select>
+                    </div>
+                  </div>
+                </TabsContent>
 
-            {/* Contact Information */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div>
-                <Label htmlFor="phoneNumber">Téléphone</Label>
-                <Input
-                  id="phoneNumber"
-                  type="tel"
-                  value={formData.phoneNumber}
-                  onChange={(e) => handleInputChange('phoneNumber', e.target.value)}
-                  className="mt-2"
-                />
-              </div>
+                <TabsContent value="contact" className="space-y-6 mt-0">
+                  {/* Contact Information */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div>
+                      <Label htmlFor="phoneNumber">Téléphone</Label>
+                      <Input
+                        id="phoneNumber"
+                        type="tel"
+                        value={formData.phoneNumber}
+                        onChange={(e) => handleInputChange('phoneNumber', e.target.value)}
+                        className="mt-2"
+                      />
+                    </div>
 
-              <div>
-                <Label htmlFor="email">Email</Label>
-                <Input
-                  id="email"
-                  type="email"
-                  value={formData.email}
-                  onChange={(e) => handleInputChange('email', e.target.value)}
-                  className="mt-2"
-                />
-              </div>
+                    <div>
+                      <Label htmlFor="email">Email</Label>
+                      <Input
+                        id="email"
+                        type="email"
+                        value={formData.email}
+                        onChange={(e) => handleInputChange('email', e.target.value)}
+                        className="mt-2"
+                      />
+                    </div>
 
-              <div className="md:col-span-2">
-                <Label htmlFor="address">Adresse</Label>
-                <Input
-                  id="address"
-                  type="text"
-                  value={formData.address}
-                  onChange={(e) => handleInputChange('address', e.target.value)}
-                  className="mt-2"
-                />
-              </div>
+                    <div className="md:col-span-2">
+                      <Label htmlFor="address">Adresse</Label>
+                      <Input
+                        id="address"
+                        type="text"
+                        value={formData.address}
+                        onChange={(e) => handleInputChange('address', e.target.value)}
+                        className="mt-2"
+                      />
+                    </div>
 
-              <div>
-                <Label htmlFor="city">Ville</Label>
-                <Input
-                  id="city"
-                  type="text"
-                  value={formData.city}
-                  onChange={(e) => handleInputChange('city', e.target.value)}
-                  className="mt-2"
-                />
-              </div>
+                    <div>
+                      <Label htmlFor="city">Ville</Label>
+                      <Input
+                        id="city"
+                        type="text"
+                        value={formData.city}
+                        onChange={(e) => handleInputChange('city', e.target.value)}
+                        className="mt-2"
+                      />
+                    </div>
 
-              <div>
-                <Label htmlFor="zipCode">Code postal</Label>
-                <Input
-                  id="zipCode"
-                  type="text"
-                  value={formData.zipCode}
-                  onChange={(e) => handleInputChange('zipCode', e.target.value)}
-                  className="mt-2"
-                />
-              </div>
-            </div>
+                    <div>
+                      <Label htmlFor="zipCode">Code postal</Label>
+                      <Input
+                        id="zipCode"
+                        type="text"
+                        value={formData.zipCode}
+                        onChange={(e) => handleInputChange('zipCode', e.target.value)}
+                        className="mt-2"
+                      />
+                    </div>
 
-            {/* Medical Information */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div>
-                <Label htmlFor="socialSecurity">N° Sécurité Sociale</Label>
-                <Input
-                  id="socialSecurity"
-                  type="text"
-                  value={formData.socialSecurity}
-                  onChange={(e) => handleInputChange('socialSecurity', e.target.value)}
-                  className="mt-2"
-                />
-              </div>
+                    <div>
+                      <Label htmlFor="socialSecurity">N° Sécurité Sociale</Label>
+                      <Input
+                        id="socialSecurity"
+                        type="text"
+                        value={formData.socialSecurity}
+                        onChange={(e) => handleInputChange('socialSecurity', e.target.value)}
+                        className="mt-2"
+                      />
+                    </div>
 
-              <div>
-                <Label htmlFor="insuranceNumber">N° Assurance</Label>
-                <Input
-                  id="insuranceNumber"
-                  type="text"
-                  value={formData.insuranceNumber}
-                  onChange={(e) => handleInputChange('insuranceNumber', e.target.value)}
-                  className="mt-2"
-                />
-              </div>
+                    <div>
+                      <Label htmlFor="insuranceNumber">N° Assurance</Label>
+                      <Input
+                        id="insuranceNumber"
+                        type="text"
+                        value={formData.insuranceNumber}
+                        onChange={(e) => handleInputChange('insuranceNumber', e.target.value)}
+                        className="mt-2"
+                      />
+                    </div>
 
-              <div className="md:col-span-2">
-                <Label htmlFor="emergencyContact">Contact d'urgence</Label>
-                <Input
-                  id="emergencyContact"
-                  type="text"
-                  value={formData.emergencyContact}
-                  onChange={(e) => handleInputChange('emergencyContact', e.target.value)}
-                  className="mt-2"
-                  placeholder="Nom et téléphone du contact d'urgence"
-                />
-              </div>
-            </div>
+                    <div className="md:col-span-2">
+                      <Label htmlFor="emergencyContact">Contact d'urgence</Label>
+                      <Input
+                        id="emergencyContact"
+                        type="text"
+                        value={formData.emergencyContact}
+                        onChange={(e) => handleInputChange('emergencyContact', e.target.value)}
+                        className="mt-2"
+                        placeholder="Nom et téléphone du contact d'urgence"
+                      />
+                    </div>
+                  </div>
+                </TabsContent>
 
-            {/* Allergies */}
-            <div>
-              <Label>Allergies</Label>
-              <div className="mt-2 space-y-2">
-                <div className="flex space-x-2">
-                  <Input
-                    type="text"
-                    value={allergyInput}
-                    onChange={(e) => setAllergyInput(e.target.value)}
-                    placeholder="Ajouter une allergie"
-                    className="flex-1"
+                <TabsContent value="medical" className="space-y-6 mt-0">
+                  <MedicalHistoryManager
+                    conditions={formData.medicalHistory}
+                    onChange={handleMedicalHistoryChange}
                   />
-                  <Button type="button" onClick={addAllergy} variant="outline">
-                    Ajouter
-                  </Button>
-                </div>
-                {formData.allergies.length > 0 && (
-                  <div className="flex flex-wrap gap-2">
-                    {formData.allergies.map((allergy, index) => (
-                      <span
-                        key={index}
-                        className="inline-flex items-center px-3 py-1 bg-red-100 text-red-800 rounded-full text-sm"
-                      >
-                        {allergy}
-                        <button
-                          type="button"
-                          onClick={() => removeAllergy(index)}
-                          className="ml-2 text-red-600 hover:text-red-800"
-                        >
-                          ✕
-                        </button>
-                      </span>
-                    ))}
-                  </div>
-                )}
-              </div>
-            </div>
+                </TabsContent>
 
-            {/* Medical History */}
-            <div>
-              <Label>Antécédents médicaux</Label>
-              <div className="mt-2 space-y-2">
-                <div className="flex space-x-2">
-                  <Input
-                    type="text"
-                    value={medicalHistoryInput}
-                    onChange={(e) => setMedicalHistoryInput(e.target.value)}
-                    placeholder="Ajouter un antécédent médical"
-                    className="flex-1"
+                <TabsContent value="allergies" className="space-y-6 mt-0">
+                  <AllergyManager
+                    allergies={formData.allergies}
+                    onChange={handleAllergiesChange}
                   />
-                  <Button type="button" onClick={addMedicalHistory} variant="outline">
-                    Ajouter
-                  </Button>
-                </div>
-                {formData.medicalHistory.length > 0 && (
-                  <div className="flex flex-wrap gap-2">
-                    {formData.medicalHistory.map((history, index) => (
-                      <span
-                        key={index}
-                        className="inline-flex items-center px-3 py-1 bg-blue-100 text-blue-800 rounded-full text-sm"
-                      >
-                        {history}
-                        <button
-                          type="button"
-                          onClick={() => removeMedicalHistory(index)}
-                          className="ml-2 text-blue-600 hover:text-blue-800"
-                        >
-                          ✕
-                        </button>
-                      </span>
-                    ))}
-                  </div>
-                )}
-              </div>
-            </div>
 
-            {/* Warnings */}
-            <div>
-              <Label>Alertes médicales</Label>
-              <div className="mt-2 space-y-2">
-                <div className="flex space-x-2">
-                  <select
-                    value={warningType}
-                    onChange={(e) => setWarningType(e.target.value)}
-                    className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  >
-                    <option value="">Sélectionner une alerte</option>
-                    <option value="allergy">Allergie</option>
-                    <option value="pregnancy">Grossesse</option>
-                    <option value="pacemaker">Pacemaker</option>
-                    <option value="claustrophobia">Claustrophobie</option>
-                    <option value="infection">Infection</option>
-                  </select>
-                  <Button type="button" onClick={addWarning} variant="outline">
-                    Ajouter
-                  </Button>
-                </div>
-                {formData.warnings.length > 0 && (
-                  <div className="flex flex-wrap gap-2">
-                    {formData.warnings.map((warning) => (
-                      <span
-                        key={warning}
-                        className="inline-flex items-center px-3 py-1 bg-yellow-100 text-yellow-800 rounded-full text-sm"
-                      >
-                        {warning === 'allergy' && '⚠️ Allergie'}
-                        {warning === 'pregnancy' && '🤱 Grossesse'}
-                        {warning === 'pacemaker' && '📱 Pacemaker'}
-                        {warning === 'claustrophobia' && '😰 Claustrophobie'}
-                        {warning === 'infection' && '🦠 Infection'}
-                        <button
-                          type="button"
-                          onClick={() => removeWarning(warning)}
-                          className="ml-2 text-yellow-600 hover:text-yellow-800"
+                  {/* Warnings */}
+                  <div>
+                    <Label>Alertes médicales</Label>
+                    <div className="mt-2 space-y-2">
+                      <div className="flex space-x-2">
+                        <select
+                          value={warningType}
+                          onChange={(e) => setWarningType(e.target.value)}
+                          className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                         >
-                          ✕
-                        </button>
-                      </span>
-                    ))}
+                          <option value="">Sélectionner une alerte</option>
+                          <option value="allergy">Allergie</option>
+                          <option value="pregnancy">Grossesse</option>
+                          <option value="pacemaker">Pacemaker</option>
+                          <option value="claustrophobia">Claustrophobie</option>
+                          <option value="infection">Infection</option>
+                        </select>
+                        <Button type="button" onClick={addWarning} variant="outline">
+                          Ajouter
+                        </Button>
+                      </div>
+                      {formData.warnings.length > 0 && (
+                        <div className="flex flex-wrap gap-2">
+                          {formData.warnings.map((warning) => (
+                            <span
+                              key={warning}
+                              className="inline-flex items-center px-3 py-1 bg-yellow-100 text-yellow-800 rounded-full text-sm"
+                            >
+                              {warning === 'allergy' && '⚠️ Allergie'}
+                              {warning === 'pregnancy' && '🤱 Grossesse'}
+                              {warning === 'pacemaker' && '📱 Pacemaker'}
+                              {warning === 'claustrophobia' && '😰 Claustrophobie'}
+                              {warning === 'infection' && '🦠 Infection'}
+                              <button
+                                type="button"
+                                onClick={() => removeWarning(warning)}
+                                className="ml-2 text-yellow-600 hover:text-yellow-800"
+                              >
+                                ✕
+                              </button>
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                    </div>
                   </div>
-                )}
+                </TabsContent>
               </div>
-            </div>
 
             {/* Form Actions */}
-            <div className="flex items-center justify-end space-x-4 pt-6 border-t">
-              <Button type="button" variant="outline" onClick={onClose}>
-                Annuler
-              </Button>
-              <Button 
-                type="submit" 
-                disabled={isSubmitting}
-                className="bg-blue-600 hover:bg-blue-700 text-white"
-              >
-                {isSubmitting ? 'Création...' : 'Créer le patient'}
-              </Button>
+            <div className="flex items-center justify-between pt-6 border-t">
+              <div className="flex space-x-2">
+                {activeTab !== 'basic' && (
+                  <Button 
+                    type="button" 
+                    variant="outline"
+                    onClick={() => {
+                      const tabs = ['basic', 'contact', 'medical', 'allergies'];
+                      const currentIndex = tabs.indexOf(activeTab);
+                      if (currentIndex > 0) setActiveTab(tabs[currentIndex - 1]);
+                    }}
+                  >
+                    ← Précédent
+                  </Button>
+                )}
+              </div>
+              
+              <div className="flex space-x-2">
+                <Button type="button" variant="outline" onClick={onClose}>
+                  Annuler
+                </Button>
+                
+                {activeTab !== 'allergies' ? (
+                  <Button 
+                    type="button"
+                    onClick={() => {
+                      const tabs = ['basic', 'contact', 'medical', 'allergies'];
+                      const currentIndex = tabs.indexOf(activeTab);
+                      if (currentIndex < tabs.length - 1) setActiveTab(tabs[currentIndex + 1]);
+                    }}
+                    className="bg-blue-600 hover:bg-blue-700 text-white"
+                  >
+                    Suivant →
+                  </Button>
+                ) : (
+                  <Button 
+                    type="submit" 
+                    disabled={isSubmitting}
+                    className="bg-green-600 hover:bg-green-700 text-white"
+                  >
+                    {isSubmitting ? 'Création...' : 'Créer le patient'}
+                  </Button>
+                )}
+              </div>
             </div>
+            </Tabs>
           </form>
         </div>
       </Card>

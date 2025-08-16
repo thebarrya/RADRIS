@@ -5,10 +5,14 @@ export interface DicomStudy {
   StudyInstanceUID: string;
   PatientID: string;
   PatientName: string;
+  PatientBirthDate?: string;
+  PatientSex?: string;
   StudyDate: string;
   StudyTime: string;
   StudyDescription: string;
   AccessionNumber: string;
+  ReferringPhysicianName?: string;
+  InstitutionName?: string;
   ModalitiesInStudy: string[];
   NumberOfStudyRelatedSeries: number;
   NumberOfStudyRelatedInstances: number;
@@ -315,13 +319,54 @@ export class DicomService {
     return `${baseOhifUrl}?${params.toString()}`;
   }
 
-  // DICOMweb URLs for direct access
+  // DICOMweb URLs for direct access (using CORS proxy for frontend compatibility)
   getDicomWebStudyUrl(studyInstanceUID: string): string {
-    return `${this.baseUrl}/dicom-web/studies/${studyInstanceUID}`;
+    const corsProxyUrl = process.env.ORTHANC_CORS_PROXY_URL || 'http://localhost:8043';
+    return `${corsProxyUrl}/dicom-web/studies/${studyInstanceUID}`;
   }
 
   getDicomWebSeriesUrl(studyInstanceUID: string, seriesInstanceUID: string): string {
-    return `${this.baseUrl}/dicom-web/studies/${studyInstanceUID}/series/${seriesInstanceUID}`;
+    const corsProxyUrl = process.env.ORTHANC_CORS_PROXY_URL || 'http://localhost:8043';
+    return `${corsProxyUrl}/dicom-web/studies/${studyInstanceUID}/series/${seriesInstanceUID}`;
+  }
+
+  // Get WADO-RS URLs for image retrieval
+  getWadoRsInstanceUrl(studyInstanceUID: string, seriesInstanceUID: string, instanceUID: string): string {
+    const corsProxyUrl = process.env.ORTHANC_CORS_PROXY_URL || 'http://localhost:8043';
+    return `${corsProxyUrl}/dicom-web/studies/${studyInstanceUID}/series/${seriesInstanceUID}/instances/${instanceUID}`;
+  }
+
+  // Get WADO-URI URL (legacy but widely supported)
+  getWadoUriUrl(studyInstanceUID: string, seriesInstanceUID?: string, instanceUID?: string): string {
+    const corsProxyUrl = process.env.ORTHANC_CORS_PROXY_URL || 'http://localhost:8043';
+    let url = `${corsProxyUrl}/wado?requestType=WADO&studyUID=${studyInstanceUID}&contentType=application/dicom`;
+    
+    if (seriesInstanceUID) {
+      url += `&seriesUID=${seriesInstanceUID}`;
+    }
+    
+    if (instanceUID) {
+      url += `&objectUID=${instanceUID}`;
+    }
+    
+    return url;
+  }
+
+  // Get metadata for DICOMweb
+  async getDicomWebStudyMetadata(studyInstanceUID: string) {
+    try {
+      const corsProxyUrl = process.env.ORTHANC_CORS_PROXY_URL || 'http://localhost:8043';
+      const response = await this.orthancClient.get(`${corsProxyUrl}/dicom-web/studies/${studyInstanceUID}/metadata`, {
+        baseURL: '', // Override baseURL for this request
+        headers: {
+          'Accept': 'application/dicom+json'
+        }
+      });
+      return response.data;
+    } catch (error) {
+      console.error(`Error fetching DICOMweb metadata for study ${studyInstanceUID}:`, error);
+      throw new Error('Failed to fetch study metadata');
+    }
   }
 
   // Utility Methods

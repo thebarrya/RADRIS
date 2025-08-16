@@ -72,7 +72,7 @@ export default function NotificationSystem({ currentUser, className }: Notificat
     loadNotifications();
     
     // Set up real-time updates (WebSocket or polling)
-    const interval = setInterval(loadNotifications, 30000); // Poll every 30 seconds
+    const interval = setInterval(loadNotifications, 5 * 60 * 1000); // Poll every 5 minutes
     
     return () => clearInterval(interval);
   }, [currentUser.id]);

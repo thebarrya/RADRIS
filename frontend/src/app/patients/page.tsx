@@ -7,10 +7,12 @@ import { AppLayout } from '@/components/layout/AppLayout';
 import { PatientTable } from '@/components/patients/PatientTable';
 import { PatientFilters } from '@/components/patients/PatientFilters';
 import { PatientSearch } from '@/components/patients/PatientSearch';
+import { AdvancedPatientSearch } from '@/components/patients/AdvancedPatientSearch';
 import { CreatePatientModal } from '@/components/patients/CreatePatientModal';
 import { Button } from '@/components/ui/button';
 import { Patient, WorklistParams } from '@/types';
 import { patientsApi } from '@/lib/api';
+import { useBackgroundSync } from '@/hooks/useBackgroundSync';
 
 export default function PatientsPage() {
   const { data: session, status } = useSession();
@@ -25,6 +27,7 @@ export default function PatientsPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [showAdvancedSearch, setShowAdvancedSearch] = useState(false);
   const [searchParams, setSearchParams] = useState({
     query: '',
     page: 1,
@@ -62,6 +65,13 @@ export default function PatientsPage() {
       fetchPatients();
     }
   }, [searchParams, session]);
+
+  // Background sync for patients data without affecting UI
+  useBackgroundSync({
+    queryKeys: [['patients']],
+    syncInterval: 5 * 60 * 1000, // 5 minutes
+    enabled: !!session
+  });
 
   // Redirect if not authenticated
   if (status === 'loading') {
@@ -101,6 +111,24 @@ export default function PatientsPage() {
     setShowCreateModal(false);
   };
 
+  const handleAdvancedSearch = (filters: any) => {
+    setSearchParams(prev => ({
+      ...prev,
+      ...filters,
+      page: 1, // Reset to first page on search
+    }));
+  };
+
+  const handleResetSearch = () => {
+    setSearchParams({
+      query: '',
+      page: 1,
+      limit: 25,
+      sortBy: 'lastName',
+      sortOrder: 'asc',
+    });
+  };
+
   return (
     <AppLayout>
       <div className="flex flex-col min-h-screen">
@@ -137,10 +165,17 @@ export default function PatientsPage() {
 
         {/* Search and Filters */}
         <div className="bg-white border-b">
-          <div className="px-6 py-4">
+          <div className="px-6 py-4 space-y-4">
             <PatientSearch 
               onSearch={handleSearch}
               searchParams={searchParams}
+            />
+            
+            <AdvancedPatientSearch
+              onSearch={handleAdvancedSearch}
+              onReset={handleResetSearch}
+              isOpen={showAdvancedSearch}
+              onToggle={() => setShowAdvancedSearch(!showAdvancedSearch)}
             />
           </div>
         </div>

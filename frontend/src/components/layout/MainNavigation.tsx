@@ -13,11 +13,11 @@ import {
   Settings,
   LogOut,
   User,
-  Bell,
   ChevronDown,
   Activity,
   Layout
 } from 'lucide-react';
+import { NotificationDropdown } from './NotificationDropdown';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -109,8 +109,13 @@ export function MainNavigation() {
     return pathname?.startsWith(href) || false;
   };
 
-  const handleSignOut = () => {
-    signOut({ callbackUrl: '/auth/login' });
+  const handleSignOut = async () => {
+    try {
+      await signOut({ callbackUrl: '/auth/login', redirect: true });
+    } catch (error) {
+      console.error('Logout error:', error);
+      window.location.href = '/auth/login';
+    }
   };
 
   return (
@@ -119,7 +124,7 @@ export function MainNavigation() {
         <div className="flex justify-between items-center px-6 py-3">
           {/* Logo and Brand */}
           <div className="flex items-center space-x-8">
-            <Link href="/dashboard" className="flex items-center space-x-2">
+            <Link href="/dashboard" prefetch={true} className="flex items-center space-x-2">
               <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center">
                 <span className="text-white font-bold text-sm">R</span>
               </div>
@@ -160,7 +165,14 @@ export function MainNavigation() {
                             const SubIcon = subItem.icon;
                             return (
                               <DropdownMenuItem key={subItem.name} asChild>
-                                <Link href={subItem.href} className="flex items-center space-x-2">
+                                <Link 
+                                  href={subItem.href} 
+                                  prefetch={true}
+                                  className="flex items-center space-x-2"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                  }}
+                                >
                                   <SubIcon className="w-4 h-4" />
                                   <span>{subItem.name}</span>
                                 </Link>
@@ -177,11 +189,15 @@ export function MainNavigation() {
                   <Link
                     key={item.name}
                     href={item.href}
+                    prefetch={true}
                     className={`flex items-center space-x-2 px-3 py-2 rounded-md text-sm font-medium transition-colors ${
                       active
                         ? 'bg-blue-100 text-blue-700 border border-blue-200'
                         : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
                     }`}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                    }}
                   >
                     <Icon className="w-4 h-4" />
                     <span>{item.name}</span>
@@ -194,12 +210,7 @@ export function MainNavigation() {
           {/* Right Side - User Menu */}
           <div className="flex items-center space-x-4">
             {/* Notifications */}
-            <Button variant="ghost" size="sm" className="relative">
-              <Bell className="w-5 h-5" />
-              <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center">
-                3
-              </span>
-            </Button>
+            <NotificationDropdown />
 
             {/* User Menu */}
             <DropdownMenu>
@@ -223,13 +234,13 @@ export function MainNavigation() {
                 <DropdownMenuLabel>Mon Compte</DropdownMenuLabel>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem asChild>
-                  <Link href="/profile" className="flex items-center space-x-2">
+                  <Link href="/profile" prefetch={true} className="flex items-center space-x-2">
                     <User className="w-4 h-4" />
                     <span>Profil</span>
                   </Link>
                 </DropdownMenuItem>
                 <DropdownMenuItem asChild>
-                  <Link href="/settings" className="flex items-center space-x-2">
+                  <Link href="/settings" prefetch={true} className="flex items-center space-x-2">
                     <Settings className="w-4 h-4" />
                     <span>Paramètres</span>
                   </Link>
@@ -237,7 +248,7 @@ export function MainNavigation() {
                 <DropdownMenuSeparator />
                 <DropdownMenuItem
                   onClick={handleSignOut}
-                  className="flex items-center space-x-2 text-red-600 focus:text-red-600"
+                  className="flex items-center space-x-2 text-red-600 focus:text-red-600 cursor-pointer"
                 >
                   <LogOut className="w-4 h-4" />
                   <span>Se déconnecter</span>

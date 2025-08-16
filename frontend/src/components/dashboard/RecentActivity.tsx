@@ -145,8 +145,10 @@ export function RecentActivity() {
       });
       return response.data;
     },
-    refetchInterval: 30000, // Refresh every 30 seconds
-    staleTime: 15000, // Consider data stale after 15 seconds
+    refetchInterval: 5 * 60 * 1000, // Refresh every 5 minutes (less aggressive)
+    staleTime: 2 * 60 * 1000, // Consider data stale after 2 minutes
+    refetchOnWindowFocus: false, // Prevent refetch on focus
+    refetchIntervalInBackground: false, // Don't refetch when page is not visible
   });
 
   const formatTimeAgo = (date: Date) => {
@@ -189,7 +191,7 @@ export function RecentActivity() {
       <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4">
         <CardTitle className="text-lg font-semibold">Activité récente</CardTitle>
         <Button variant="outline" size="sm" asChild>
-          <Link href="/worklist" className="flex items-center space-x-1">
+          <Link href="/worklist" prefetch={true} className="flex items-center space-x-1">
             <span>Voir tout</span>
             <ExternalLink className="w-3 h-3" />
           </Link>
@@ -267,7 +269,7 @@ export function RecentActivity() {
                       {activity.link && (
                         <div className="mt-2">
                           <Button variant="ghost" size="sm" asChild className="h-6 px-2 text-xs">
-                            <Link href={activity.link} className="flex items-center space-x-1">
+                            <Link href={activity.link} prefetch={true} className="flex items-center space-x-1">
                               <span>Voir détails</span>
                               <ExternalLink className="w-3 h-3" />
                             </Link>

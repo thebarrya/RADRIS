@@ -22,6 +22,7 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { Report, User as UserType, ReportStatus } from '@/types';
+import { useViewerReportsIntegration } from '@/services/viewerReportsIntegration';
 
 interface ValidationStep {
   id: string;
@@ -118,6 +119,9 @@ export default function ValidationWorkflow({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showComments, setShowComments] = useState(false);
 
+  // Integration with viewer-reports system
+  const { getAnnotations, navigateToViewer } = useViewerReportsIntegration();
+
   useEffect(() => {
     // Initialize validation workflow based on report author's role
     const authorRole = report.createdBy.role;
@@ -206,33 +210,64 @@ export default function ValidationWorkflow({
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
-            <div>
-              <Label className="font-medium text-gray-900">Author</Label>
-              <div className="flex items-center space-x-2 mt-1">
-                <User className="h-4 w-4 text-gray-500" />
-                <span>Dr. {report.createdBy.firstName} {report.createdBy.lastName}</span>
-                <Badge variant="outline" className="text-xs">
-                  {ROLE_LABELS[report.createdBy.role]}
-                </Badge>
+          <div className="space-y-4">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+              <div>
+                <Label className="font-medium text-gray-900">Author</Label>
+                <div className="flex items-center space-x-2 mt-1">
+                  <User className="h-4 w-4 text-gray-500" />
+                  <span>Dr. {report.createdBy.firstName} {report.createdBy.lastName}</span>
+                  <Badge variant="outline" className="text-xs">
+                    {ROLE_LABELS[report.createdBy.role]}
+                  </Badge>
+                </div>
+              </div>
+              
+              <div>
+                <Label className="font-medium text-gray-900">Created</Label>
+                <div className="flex items-center space-x-2 mt-1">
+                  <Calendar className="h-4 w-4 text-gray-500" />
+                  <span>{new Date(report.createdAt).toLocaleDateString('fr-FR')}</span>
+                </div>
+              </div>
+              
+              <div>
+                <Label className="font-medium text-gray-900">Last Updated</Label>
+                <div className="flex items-center space-x-2 mt-1">
+                  <Calendar className="h-4 w-4 text-gray-500" />
+                  <span>{new Date(report.updatedAt).toLocaleDateString('fr-FR')}</span>
+                </div>
               </div>
             </div>
-            
-            <div>
-              <Label className="font-medium text-gray-900">Created</Label>
-              <div className="flex items-center space-x-2 mt-1">
-                <Calendar className="h-4 w-4 text-gray-500" />
-                <span>{new Date(report.createdAt).toLocaleDateString('fr-FR')}</span>
-              </div>
-            </div>
-            
-            <div>
-              <Label className="font-medium text-gray-900">Last Updated</Label>
-              <div className="flex items-center space-x-2 mt-1">
-                <Calendar className="h-4 w-4 text-gray-500" />
-                <span>{new Date(report.updatedAt).toLocaleDateString('fr-FR')}</span>
-              </div>
-            </div>
+
+            {/* Image References Summary */}
+            {(() => {
+              const annotations = getAnnotations();
+              if (annotations.length > 0) {
+                return (
+                  <div className="bg-blue-50 border border-blue-200 rounded-md p-3">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <Label className="font-medium text-blue-900">Image References</Label>
+                        <p className="text-sm text-blue-700 mt-1">
+                          {annotations.length} annotation(s) linked to this report
+                        </p>
+                      </div>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => navigateToViewer()}
+                        className="text-blue-600 border-blue-300 hover:bg-blue-100"
+                      >
+                        <Eye className="h-4 w-4 mr-1" />
+                        View Images
+                      </Button>
+                    </div>
+                  </div>
+                );
+              }
+              return null;
+            })()}
           </div>
         </CardContent>
       </Card>

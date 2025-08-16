@@ -13,8 +13,10 @@ export function useDashboardStats() {
       return response.data;
     },
     enabled: status === 'authenticated' && !!session, // Only run when authenticated
-    refetchInterval: 60000, // Refetch every minute
-    staleTime: 30000, // Consider data stale after 30 seconds
+    refetchInterval: 10 * 60 * 1000, // Refetch every 10 minutes (less aggressive)
+    staleTime: 5 * 60 * 1000, // Consider data stale after 5 minutes
+    refetchOnWindowFocus: false, // Prevent refetch on focus
+    refetchIntervalInBackground: false, // Don't refetch when page is not visible
     retry: 3,
   });
 }

@@ -1,1 +1,8 @@
-{}
+{
+  "/not-found": "app/not-found.js",
+  "/worklist/page": "app/worklist/page.js",
+  "/dashboard/page": "app/dashboard/page.js",
+  "/examinations/page": "app/examinations/page.js",
+  "/api/auth/[...nextauth]/route": "app/api/auth/[...nextauth]/route.js",
+  "/patients/page": "app/patients/page.js"
+}

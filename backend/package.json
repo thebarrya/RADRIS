@@ -32,6 +32,7 @@
     "fastify": "^4.24.3",
     "ioredis": "^5.3.2",
     "jsonwebtoken": "^9.0.2",
+    "react-resizable-panels": "^3.0.4",
     "ws": "^8.18.3",
     "zod": "^3.22.4"
   },

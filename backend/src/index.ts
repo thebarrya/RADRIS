@@ -10,7 +10,8 @@ import { patientRoutes } from './routes/patients';
 import { examinationRoutes } from './routes/examinations';
 import { reportRoutes } from './routes/reports';
 import { dicomRoutes } from './routes/dicom';
-// import { WebSocketService } from './services/websocket';
+import { patientIdentificationRoutes } from './routes/patientIdentification';
+import { WebSocketService } from './services/websocket';
 
 const prisma = new PrismaClient();
 const redis = new Redis(process.env.REDIS_URL || 'redis://localhost:6379');
@@ -79,9 +80,9 @@ async function start() {
       });
     });
 
-    // Initialize WebSocket service (temporarily disabled)
-    // const wsService = new WebSocketService(server);
-    // server.decorate('websocket', wsService);
+    // Initialize WebSocket service
+    const wsService = new WebSocketService(server);
+    server.decorate('websocket', wsService);
 
     // Health check
     server.get('/health', async (request, reply) => {
@@ -95,6 +96,11 @@ async function start() {
           services: {
             database: 'connected',
             redis: 'connected',
+            websocket: {
+              status: 'connected',
+              clients: server.websocket?.getConnectedClientsCount() || 0,
+              usersOnline: server.websocket?.getUsersOnline()?.length || 0,
+            },
           },
         };
       } catch (error) {
@@ -113,6 +119,7 @@ async function start() {
     await server.register(examinationRoutes, { prefix: '/api/examinations' });
     await server.register(reportRoutes, { prefix: '/api/reports' });
     await server.register(dicomRoutes, { prefix: '/api/dicom' });
+    await server.register(patientIdentificationRoutes, { prefix: '/api/patient-identification' });
 
     // Start server
     const port = Number(process.env.PORT) || 3001;
@@ -129,6 +136,7 @@ async function start() {
 // Graceful shutdown
 process.on('SIGTERM', async () => {
   console.log('SIGTERM received, shutting down gracefully');
+  server.websocket?.close();
   await server.close();
   await prisma.$disconnect();
   await redis.quit();
@@ -137,6 +145,7 @@ process.on('SIGTERM', async () => {
 
 process.on('SIGINT', async () => {
   console.log('SIGINT received, shutting down gracefully');
+  server.websocket?.close();
   await server.close();
   await prisma.$disconnect();
   await redis.quit();

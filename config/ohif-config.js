@@ -8,9 +8,9 @@ window.config = {
       configuration: {
         friendlyName: 'RADRIS PACS',
         name: 'orthanc',
-        wadoUriRoot: 'http://localhost:8042/wado',
-        qidoRoot: 'http://localhost:8042/dicom-web',
-        wadoRoot: 'http://localhost:8042/dicom-web',
+        wadoUriRoot: 'http://localhost:8043/wado',
+        qidoRoot: 'http://localhost:8043/dicom-web',
+        wadoRoot: 'http://localhost:8043/dicom-web',
         qidoSupportsIncludeField: false,
         imageRendering: 'wadors',
         thumbnailRendering: 'wadors',
@@ -18,12 +18,20 @@ window.config = {
         supportsFuzzyMatching: false,
         supportsWildcard: false,
         staticWado: true,
+        singlepart: 'bulkdata,video,pdf',
+        // Add timeout settings
         requestOptions: {
           requestCredentials: 'omit',
+          timeout: 30000,
           headers: {
             'Accept': 'application/dicom+json',
             'Content-Type': 'application/dicom+json'
           }
+        },
+        // Add bulk data settings
+        bulkDataURI: {
+          enabled: true,
+          relativeResolution: 'studies'
         }
       },
     },
@@ -35,6 +43,14 @@ window.config = {
   maxConcurrentMetadataRequests: 10,
   maxNumberOfWebWorkers: 3,
   omitQuotationForMultipartRequest: true,
+  
+  // Add debugging options
+  debugMode: true,
+  showLoadingIndicator: true,
+  
+  // Improve error handling
+  allowErrorRecovery: true,
+  strictMode: false,
   
   hotkeys: [
     {

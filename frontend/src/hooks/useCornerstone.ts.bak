@@ -1,0 +1,283 @@
+'use client';
+
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { 
+  initializeCornerstone, 
+  getWADORSImageId, 
+  DEFAULT_VIEWPORT_SETTINGS, 
+  ToolName, 
+  TOOL_NAMES 
+} from '@/lib/cornerstone';
+
+interface UseCornerstone {
+  isInitialized: boolean;
+  error: string | null;
+  activeTool: ToolName | null;
+  viewportSettings: ViewportSettings;
+  setActiveTool: (tool: ToolName) => void;
+  updateViewportSettings: (settings: Partial<ViewportSettings>) => void;
+  resetViewport: () => void;
+  loadStudy: (studyInstanceUID: string) => Promise<void>;
+  enableElement: (element: HTMLElement, viewportId: string) => Promise<void>;
+  disableElement: (viewportId: string) => void;
+}
+
+interface ViewportSettings {
+  windowWidth: number;
+  windowCenter: number;
+  zoom: number;
+  rotation: number;
+  invert: boolean;
+  hflip: boolean;
+  vflip: boolean;
+  colormap?: string;
+}
+
+export function useCornerstone(): UseCornerstone {
+  const [isInitialized, setIsInitialized] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [activeTool, setActiveTool] = useState<ToolName | null>(TOOL_NAMES.Pan);
+  const [viewportSettings, setViewportSettings] = useState<ViewportSettings>({
+    windowWidth: DEFAULT_VIEWPORT_SETTINGS.voi.windowWidth,
+    windowCenter: DEFAULT_VIEWPORT_SETTINGS.voi.windowCenter,
+    zoom: 1,
+    rotation: 0,
+    invert: false,
+    hflip: false,
+    vflip: false,
+  });
+
+  const renderingEngineRef = useRef<any>(null);
+  const toolGroupRef = useRef<any>(null);
+  const viewportsRef = useRef<Map<string, any>>(new Map());
+
+  // Initialize Cornerstone
+  useEffect(() => {
+    const initialize = async () => {
+      try {
+        await initializeCornerstone();
+        
+        // Import modules dynamically to avoid SSR issues
+        const { RenderingEngine } = await import('@cornerstonejs/core');
+        const cornerstoneTools = await import('@cornerstonejs/tools');
+        const { 
+          ToolGroupManager,
+          PanTool,
+          ZoomTool,
+          WindowLevelTool,
+          StackScrollMouseWheelTool,
+          LengthTool,
+          AngleTool,
+          RectangleROITool,
+          EllipticalROITool,
+          addTool,
+        } = cornerstoneTools;
+
+        // Add tools
+        addTool(PanTool);
+        addTool(ZoomTool);
+        addTool(WindowLevelTool);
+        addTool(StackScrollMouseWheelTool);
+        addTool(LengthTool);
+        addTool(AngleTool);
+        addTool(RectangleROITool);
+        addTool(EllipticalROITool);
+
+        // Create rendering engine
+        renderingEngineRef.current = new RenderingEngine('radiologyViewer');
+
+        // Create tool group
+        const toolGroupId = 'default';
+        toolGroupRef.current = ToolGroupManager.createToolGroup(toolGroupId);
+
+        if (toolGroupRef.current) {
+          // Add tools to tool group
+          toolGroupRef.current.addTool(TOOL_NAMES.Pan);
+          toolGroupRef.current.addTool(TOOL_NAMES.Zoom);
+          toolGroupRef.current.addTool(TOOL_NAMES.WindowLevel);
+          toolGroupRef.current.addTool(TOOL_NAMES.StackScrollMouseWheel);
+          toolGroupRef.current.addTool(TOOL_NAMES.Length);
+          toolGroupRef.current.addTool(TOOL_NAMES.Angle);
+          toolGroupRef.current.addTool(TOOL_NAMES.RectangleROI);
+          toolGroupRef.current.addTool(TOOL_NAMES.EllipticalROI);
+
+          // Set initial tool states
+          toolGroupRef.current.setToolActive(TOOL_NAMES.Pan, { bindings: [{ mouseButton: 1 }] });
+          toolGroupRef.current.setToolActive(TOOL_NAMES.Zoom, { bindings: [{ mouseButton: 2 }] });
+          toolGroupRef.current.setToolActive(TOOL_NAMES.WindowLevel, { bindings: [{ mouseButton: 3 }] });
+          toolGroupRef.current.setToolActive(TOOL_NAMES.StackScrollMouseWheel);
+          
+          // Set measurement tools as passive initially
+          toolGroupRef.current.setToolPassive(TOOL_NAMES.Length);
+          toolGroupRef.current.setToolPassive(TOOL_NAMES.Angle);
+          toolGroupRef.current.setToolPassive(TOOL_NAMES.RectangleROI);
+          toolGroupRef.current.setToolPassive(TOOL_NAMES.EllipticalROI);
+        }
+
+        setIsInitialized(true);
+        setError(null);
+      } catch (err) {
+        console.error('Failed to initialize Cornerstone:', err);
+        setError(err instanceof Error ? err.message : 'Failed to initialize viewer');
+        setIsInitialized(false);
+      }
+    };
+
+    initialize();
+
+    return () => {
+      // Cleanup
+      if (renderingEngineRef.current) {
+        renderingEngineRef.current.destroy();
+      }
+      // Tool group cleanup will be handled automatically
+    };
+  }, []);
+
+  const enableElement = useCallback(async (element: HTMLElement, viewportId: string) => {
+    if (!isInitialized || !renderingEngineRef.current) {
+      throw new Error('Cornerstone not initialized');
+    }
+
+    try {
+      const cornerstoneCore = await import('@cornerstonejs/core');
+      const { enums } = cornerstoneCore;
+      
+      const viewportInput = {
+        viewportId,
+        element,
+        type: enums.ViewportType.STACK,
+      };
+
+      renderingEngineRef.current.enableElement(viewportInput);
+      
+      const viewport = renderingEngineRef.current.getViewport(viewportId);
+      viewportsRef.current.set(viewportId, viewport);
+
+      // Add viewport to tool group
+      if (toolGroupRef.current) {
+        toolGroupRef.current.addViewport(viewportId, 'radiologyViewer');
+      }
+
+    } catch (err) {
+      console.error('Failed to enable element:', err);
+      throw err;
+    }
+  }, [isInitialized]);
+
+  const disableElement = useCallback((viewportId: string) => {
+    if (renderingEngineRef.current) {
+      renderingEngineRef.current.disableElement(viewportId);
+      viewportsRef.current.delete(viewportId);
+    }
+  }, []);
+
+  const changeActiveTool = useCallback((tool: ToolName) => {
+    if (!toolGroupRef.current) return;
+
+    try {
+      // Deactivate current tool
+      if (activeTool) {
+        toolGroupRef.current.setToolPassive(activeTool);
+      }
+
+      // Activate new tool
+      toolGroupRef.current.setToolActive(tool, { 
+        bindings: [{ mouseButton: 1 }] 
+      });
+
+      setActiveTool(tool);
+    } catch (err) {
+      console.error('Failed to change tool:', err);
+    }
+  }, [activeTool]);
+
+  const updateViewportSettings = useCallback((settings: Partial<ViewportSettings>) => {
+    setViewportSettings(prev => ({ ...prev, ...settings }));
+
+    // Apply settings to all active viewports
+    viewportsRef.current.forEach((viewport) => {
+      try {
+        if (settings.windowWidth !== undefined || settings.windowCenter !== undefined) {
+          viewport.setProperties({
+            voiRange: {
+              upper: (settings.windowCenter ?? viewportSettings.windowCenter) + (settings.windowWidth ?? viewportSettings.windowWidth) / 2,
+              lower: (settings.windowCenter ?? viewportSettings.windowCenter) - (settings.windowWidth ?? viewportSettings.windowWidth) / 2,
+            }
+          });
+        }
+
+        if (settings.zoom !== undefined) {
+          viewport.setZoom(settings.zoom);
+        }
+
+        if (settings.rotation !== undefined) {
+          viewport.setProperties({ rotation: settings.rotation });
+        }
+
+        if (settings.invert !== undefined) {
+          viewport.setProperties({ invert: settings.invert });
+        }
+
+        if (settings.hflip !== undefined || settings.vflip !== undefined) {
+          viewport.setProperties({
+            flipHorizontal: settings.hflip ?? viewportSettings.hflip,
+            flipVertical: settings.vflip ?? viewportSettings.vflip,
+          });
+        }
+
+        viewport.render();
+      } catch (err) {
+        console.error('Failed to update viewport settings:', err);
+      }
+    });
+  }, [viewportSettings]);
+
+  const resetViewport = useCallback(() => {
+    const defaultSettings = {
+      windowWidth: DEFAULT_VIEWPORT_SETTINGS.voi.windowWidth,
+      windowCenter: DEFAULT_VIEWPORT_SETTINGS.voi.windowCenter,
+      zoom: 1,
+      rotation: 0,
+      invert: false,
+      hflip: false,
+      vflip: false,
+    };
+
+    updateViewportSettings(defaultSettings);
+  }, [updateViewportSettings]);
+
+  const loadStudy = useCallback(async (studyInstanceUID: string) => {
+    if (!isInitialized) {
+      throw new Error('Cornerstone not initialized');
+    }
+
+    try {
+      // This would typically involve fetching series and instances
+      // For now, we'll use a placeholder implementation
+      console.log('Loading study:', studyInstanceUID);
+      
+      // TODO: Implement actual study loading
+      // 1. Fetch series list from DICOM API
+      // 2. Load first series
+      // 3. Set stack on viewport
+      
+    } catch (err) {
+      console.error('Failed to load study:', err);
+      throw err;
+    }
+  }, [isInitialized]);
+
+  return {
+    isInitialized,
+    error,
+    activeTool,
+    viewportSettings,
+    setActiveTool: changeActiveTool,
+    updateViewportSettings,
+    resetViewport,
+    loadStudy,
+    enableElement,
+    disableElement,
+  };
+}

@@ -1,0 +1,45 @@
+{
+  "Name": "RADRIS PACS",
+  "DicomAet": "RADRIS",
+  "DicomPort": 4242,
+  "HttpPort": 8042,
+
+  "Plugins": [],
+
+  "HttpServerEnabled": true,
+  "HttpDescribeErrors": true,
+  "HttpCompressionEnabled": true,
+  "HttpRequestTimeout": 60,
+  
+  "ConcurrentJobs": 4,
+  "StorageCompression": false,
+
+  "HttpHeaders": {
+    "Access-Control-Allow-Origin": "*",
+    "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
+    "Access-Control-Allow-Headers": "Content-Type, Authorization, Cache-Control, X-Requested-With, Accept, Origin",
+    "Access-Control-Allow-Credentials": "false",
+    "Access-Control-Max-Age": "86400"
+  },
+
+  "DicomServerEnabled": true,
+  "DicomAlwaysAllowEcho": true,
+  "DicomAlwaysAllowFind": true,
+  "DicomAlwaysAllowMove": true,
+  "DicomAlwaysAllowGet": true,
+  "DicomAlwaysAllowStore": true,
+
+  "RemoteAccessAllowed": true,
+  "AuthenticationEnabled": false,
+  "SslEnabled": false,
+
+  "LimitFindResults": 0,
+  "LimitFindInstances": 0,
+  "MaximumStorageSize": 0,
+  "MaximumPatientCount": 0,
+
+  "LogLevel": "default",
+
+  "StorageDirectory": "/var/lib/orthanc/db",
+  "IndexDirectory": "/var/lib/orthanc/db"
+}

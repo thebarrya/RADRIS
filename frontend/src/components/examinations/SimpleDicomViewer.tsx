@@ -42,7 +42,7 @@ export function SimpleDicomViewer({
   const [error, setError] = useState<string | null>(null);
 
   // URLs for different viewers
-  const ohifUrl = `http://localhost:3005/viewer?datasources=dicomweb&StudyInstanceUIDs=${studyInstanceUID}`;
+  const ohifUrl = `http://localhost:3005/viewer?StudyInstanceUIDs=${studyInstanceUID}`;
   const orthancExplorerUrl = `http://localhost:8042/app/explorer.html#study?uuid=${studyInstanceUID}`;
   const stoneViewerUrl = `http://localhost:8042/ui/app/stone-webviewer/index.html?study=${studyInstanceUID}`;
 
@@ -247,7 +247,7 @@ export function SimpleDicomViewer({
             </div>
             <div>
               <span className="text-muted-foreground">WADO-RS Root:</span>
-              <p className="font-mono text-xs">http://localhost:8042/dicom-web</p>
+              <p className="font-mono text-xs">http://localhost:8043/dicom-web</p>
             </div>
             {studyDate && (
               <div>

@@ -1,12 +1,12 @@
 'use client';
 
 import { Suspense, useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useNavigation } from '@/hooks/useNavigation';
 import TemplateManager from '@/components/reports/TemplateManager';
 import type { User } from '@/types';
 
 function TemplateManagerContent() {
-  const router = useRouter();
+  const { navigateTo } = useNavigation();
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -37,11 +37,11 @@ function TemplateManagerContent() {
   };
 
   const handleCreateTemplate = () => {
-    router.push('/reports/templates/new');
+    navigateTo('/reports/templates/new');
   };
 
   const handleEditTemplate = (templateId: string) => {
-    router.push(`/reports/templates/${templateId}/edit`);
+    navigateTo(`/reports/templates/${templateId}/edit`);
   };
 
   if (isLoading) {

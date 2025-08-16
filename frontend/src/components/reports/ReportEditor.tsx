@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { useRouter } from 'next/navigation';
+import { useNavigation } from '@/hooks/useNavigation';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -28,6 +28,7 @@ import MedicalCodesSelector from './MedicalCodesSelector';
 import AutoSaveIndicator from './AutoSaveIndicator';
 import ReportPreview from './ReportPreview';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { useViewerReportsIntegration } from '@/services/viewerReportsIntegration';
 
 interface ReportEditorProps {
   examinationId: string;
@@ -66,7 +67,7 @@ export default function ReportEditor({
   onSubmit, 
   onCancel 
 }: ReportEditorProps) {
-  const router = useRouter();
+  const { navigateTo } = useNavigation();
   const [examination, setExamination] = useState<Examination | null>(null);
   const [templates, setTemplates] = useState<ReportTemplate[]>([]);
   const [selectedTemplate, setSelectedTemplate] = useState<ReportTemplate | null>(null);
@@ -88,6 +89,52 @@ export default function ReportEditor({
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [validationErrors, setValidationErrors] = useState<Record<string, string>>({});
   const [showPreview, setShowPreview] = useState(false);
+  const [linkedFindings, setLinkedFindings] = useState<Array<{id: string, text: string, section: string}>>([]);
+
+  // Integration with viewer-reports system
+  const { service: integrationService, getAnnotations, getFindings } = useViewerReportsIntegration();
+
+  // Initialize integration service
+  useEffect(() => {
+    if (examinationId && reportId) {
+      integrationService.initialize(examinationId, reportId);
+      
+      // Load linked findings
+      const findings = getFindings();
+      setLinkedFindings(findings.map(f => ({
+        id: f.id,
+        text: f.text,
+        section: f.section
+      })));
+
+      // Listen for new findings from viewer
+      const handleFindingUpdated = (data: any) => {
+        const { finding } = data;
+        setLinkedFindings(prev => [...prev, {
+          id: finding.id,
+          text: finding.text,
+          section: finding.section
+        }]);
+      };
+
+      const handleAddToReportFindings = (data: any) => {
+        const { text, measurements } = data;
+        // Add measurement text to findings
+        const currentFindings = formData.findings;
+        const newFindings = currentFindings + (currentFindings ? '\n\n' : '') + text;
+        setFormData(prev => ({ ...prev, findings: newFindings }));
+        setHasUnsavedChanges(true);
+      };
+
+      integrationService.on('finding-updated', handleFindingUpdated);
+      integrationService.on('add-to-report-findings', handleAddToReportFindings);
+
+      return () => {
+        integrationService.off('finding-updated', handleFindingUpdated);
+        integrationService.off('add-to-report-findings', handleAddToReportFindings);
+      };
+    }
+  }, [examinationId, reportId, integrationService, getFindings, formData.findings]);
 
   // Load examination and templates
   useEffect(() => {
@@ -225,9 +272,9 @@ export default function ReportEditor({
     }
   }, [formData, hasUnsavedChanges, isSaving, examinationId, reportId, onSave]);
 
-  // Auto-save every 30 seconds
+  // Auto-save every 2 minutes to reduce server load
   useEffect(() => {
-    const interval = setInterval(autoSave, 30000);
+    const interval = setInterval(autoSave, 2 * 60 * 1000);
     return () => clearInterval(interval);
   }, [autoSave]);
 
@@ -349,7 +396,7 @@ export default function ReportEditor({
 
       if (response.ok) {
         onSubmit?.(reportData);
-        router.push('/worklist');
+        navigateTo('/worklist');
       }
     } catch (error) {
       console.error('Submit failed:', error);
@@ -363,11 +410,11 @@ export default function ReportEditor({
     if (hasUnsavedChanges) {
       if (confirm('You have unsaved changes. Are you sure you want to cancel?')) {
         onCancel?.();
-        router.back();
+        window.history.back();
       }
     } else {
       onCancel?.();
-      router.back();
+      window.history.back();
     }
   };
 
@@ -388,7 +435,10 @@ export default function ReportEditor({
       <div className="bg-white border-b px-6 py-4">
         <div className="flex items-center justify-between">
           <div className="flex items-center space-x-4">
-            <Button variant="ghost" size="sm" onClick={handleCancel}>
+            <Button variant="ghost" size="sm" onClick={(e) => {
+              e.stopPropagation();
+              handleCancel();
+            }}>
               <ArrowLeft className="h-4 w-4 mr-2" />
               Back
             </Button>
@@ -439,12 +489,18 @@ export default function ReportEditor({
               </DialogContent>
             </Dialog>
 
-            <Button variant="outline" onClick={handleSave} disabled={isSaving}>
+            <Button variant="outline" onClick={(e) => {
+              e.stopPropagation();
+              handleSave();
+            }} disabled={isSaving}>
               <Save className="h-4 w-4 mr-2" />
               Save
             </Button>
             
-            <Button onClick={handleSubmit} disabled={isSaving}>
+            <Button onClick={(e) => {
+              e.stopPropagation();
+              handleSubmit();
+            }} disabled={isSaving}>
               <Send className="h-4 w-4 mr-2" />
               Submit for Review
             </Button>
@@ -588,21 +644,88 @@ export default function ReportEditor({
                 )}
 
                 {activeSection === 'findings' && (
-                  <div>
-                    <Label htmlFor="findings">Findings</Label>
-                    <Textarea
-                      id="findings"
-                      value={formData.findings}
-                      onChange={(e) => handleFieldChange('findings', e.target.value)}
-                      placeholder="Describe the imaging findings..."
-                      className={cn(
-                        "min-h-[200px] mt-2",
-                        validationErrors.findings && "border-red-500"
-                      )}
-                    />
-                    {validationErrors.findings && (
-                      <p className="text-sm text-red-500 mt-1">{validationErrors.findings}</p>
+                  <div className="space-y-4">
+                    {/* Linked Image Findings */}
+                    {linkedFindings.filter(f => f.section === 'findings').length > 0 && (
+                      <div>
+                        <Label className="text-sm font-medium text-blue-600">Linked Image Findings</Label>
+                        <div className="mt-2 space-y-2">
+                          {linkedFindings.filter(f => f.section === 'findings').map((finding) => (
+                            <div
+                              key={finding.id}
+                              className="p-2 bg-blue-50 border border-blue-200 rounded-md text-sm"
+                            >
+                              <div className="flex items-center justify-between">
+                                <span className="text-blue-800">{finding.text}</span>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => {
+                                    // Add finding text to main findings
+                                    const currentFindings = formData.findings;
+                                    const newFindings = currentFindings + (currentFindings ? '\n' : '') + finding.text;
+                                    setFormData(prev => ({ ...prev, findings: newFindings }));
+                                    setHasUnsavedChanges(true);
+                                  }}
+                                  className="text-blue-600 hover:text-blue-700 p-1"
+                                >
+                                  Add to Findings
+                                </Button>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                        <Separator className="my-4" />
+                      </div>
                     )}
+
+                    <div>
+                      <Label htmlFor="findings">Findings</Label>
+                      <Textarea
+                        id="findings"
+                        value={formData.findings}
+                        onChange={(e) => handleFieldChange('findings', e.target.value)}
+                        placeholder="Describe the imaging findings..."
+                        className={cn(
+                          "min-h-[200px] mt-2",
+                          validationErrors.findings && "border-red-500"
+                        )}
+                      />
+                      {validationErrors.findings && (
+                        <p className="text-sm text-red-500 mt-1">{validationErrors.findings}</p>
+                      )}
+                      
+                      {/* Helper buttons */}
+                      <div className="flex items-center space-x-2 mt-2">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={() => {
+                            integrationService.navigateToViewer();
+                          }}
+                        >
+                          🖼️ Open Viewer
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={() => {
+                            const annotations = getAnnotations();
+                            if (annotations.length > 0) {
+                              const annotationSummary = `${annotations.length} annotation(s) available in viewer`;
+                              const currentFindings = formData.findings;
+                              const newFindings = currentFindings + (currentFindings ? '\n\n' : '') + annotationSummary;
+                              setFormData(prev => ({ ...prev, findings: newFindings }));
+                              setHasUnsavedChanges(true);
+                            }
+                          }}
+                        >
+                          📍 Import Annotations
+                        </Button>
+                      </div>
+                    </div>
                   </div>
                 )}
 

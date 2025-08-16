@@ -20,6 +20,44 @@ const nextConfig = {
   images: {
     domains: ['localhost'],
   },
+  async headers() {
+    return [
+      {
+        source: '/workers/:path*',
+        headers: [
+          {
+            key: 'Cross-Origin-Embedder-Policy',
+            value: 'require-corp',
+          },
+          {
+            key: 'Cross-Origin-Opener-Policy',
+            value: 'same-origin',
+          },
+          {
+            key: 'Cache-Control',
+            value: 'public, max-age=31536000, immutable',
+          },
+        ],
+      },
+      {
+        source: '/codecs/:path*',
+        headers: [
+          {
+            key: 'Cross-Origin-Embedder-Policy',
+            value: 'require-corp',
+          },
+          {
+            key: 'Cross-Origin-Opener-Policy',
+            value: 'same-origin',
+          },
+          {
+            key: 'Cache-Control',
+            value: 'public, max-age=31536000, immutable',
+          },
+        ],
+      },
+    ];
+  },
   async rewrites() {
     return [
       // Proxy specific backend routes, but exclude NextAuth routes
@@ -41,17 +79,36 @@ const nextConfig = {
       },
     ];
   },
-  webpack: (config) => {
+  webpack: (config, { isServer, webpack }) => {
     // Add support for DICOM files
     config.module.rules.push({
       test: /\.dcm$/,
       use: 'raw-loader',
     });
+
+    // Fix for Cornerstone.js Node.js modules in browser (client-side only)
+    if (!isServer) {
+      config.resolve.fallback = {
+        ...config.resolve.fallback,
+        fs: false,
+        path: false,
+        os: false,
+        crypto: false,
+        buffer: require.resolve('buffer'),
+      };
+      
+      // Add Buffer polyfill for Cornerstone.js
+      config.plugins.push(
+        new webpack.ProvidePlugin({
+          Buffer: ['buffer', 'Buffer'],
+        })
+      );
+    }
     
     return config;
   },
   experimental: {
-    serverComponentsExternalPackages: ['cornerstone-core'],
+    serverComponentsExternalPackages: ['@cornerstonejs/core', '@cornerstonejs/tools', '@cornerstonejs/dicom-image-loader'],
   },
 };
 

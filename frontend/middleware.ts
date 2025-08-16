@@ -44,6 +44,11 @@ export default withAuth(
           return true;
         }
         
+        // Allow access to test pages without token (for development)
+        if (pathname.startsWith('/test-')) {
+          return true;
+        }
+        
         // Require token for all other pages
         return !!token;
       },
@@ -60,7 +65,8 @@ export const config = {
      * - _next/image (image optimization files)
      * - favicon.ico (favicon file)
      * - public folder
+     * - test- (test pages)
      */
-    '/((?!api/auth|_next/static|_next/image|favicon.ico|public).*)',
+    '/((?!api/auth|_next/static|_next/image|favicon.ico|public|test-).*)',
   ],
 };

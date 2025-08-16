@@ -5,6 +5,9 @@ import { Patient, Examination } from '@/types';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { PatientExaminationHistory } from './PatientExaminationHistory';
+import { useNavigation } from '@/hooks/useNavigation';
 import { formatDate, calculateAge } from '@/utils/dateUtils';
 import { cn } from '@/lib/utils';
 
@@ -14,7 +17,8 @@ interface PatientDetailViewProps {
 }
 
 export function PatientDetailView({ patient, onPatientUpdated }: PatientDetailViewProps) {
-  const [activeTab, setActiveTab] = useState<'info' | 'examinations' | 'history'>('info');
+  const [activeTab, setActiveTab] = useState('info');
+  const { navigateTo } = useNavigation();
 
   const getGenderDisplay = (gender: string) => {
     switch (gender) {
@@ -81,7 +85,10 @@ export function PatientDetailView({ patient, onPatientUpdated }: PatientDetailVi
             <div className="flex items-center space-x-4">
               <Button
                 variant="ghost"
-                onClick={() => window.history.back()}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  window.history.back();
+                }}
                 className="p-2"
               >
                 ← Retour
@@ -100,14 +107,20 @@ export function PatientDetailView({ patient, onPatientUpdated }: PatientDetailVi
             
             <div className="flex items-center space-x-3">
               <Button
-                onClick={() => window.open(`/patients/${patient.id}/edit`, '_self')}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  navigateTo(`/patients/${patient.id}/edit`);
+                }}
                 variant="outline"
               >
                 ✏️ Modifier
               </Button>
               
               <Button
-                onClick={() => window.open(`/examinations/new?patientId=${patient.id}`, '_blank')}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  navigateTo(`/examinations/schedule?patientId=${patient.id}`);
+                }}
                 className="bg-blue-600 hover:bg-blue-700 text-white"
               >
                 ➕ Nouvel examen
@@ -160,7 +173,7 @@ export function PatientDetailView({ patient, onPatientUpdated }: PatientDetailVi
                   : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
               )}
             >
-              🔬 Examens ({(patient as any).examinations?.length || 0})
+              🔬 Examens
             </button>
             
             <button
@@ -307,54 +320,7 @@ export function PatientDetailView({ patient, onPatientUpdated }: PatientDetailVi
         )}
 
         {activeTab === 'examinations' && (
-          <Card className="p-6">
-            <div className="flex items-center justify-between mb-6">
-              <h3 className="text-lg font-semibold text-gray-900">Examens</h3>
-              <Button
-                onClick={() => window.open(`/examinations/new?patientId=${patient.id}`, '_blank')}
-                className="bg-blue-600 hover:bg-blue-700 text-white"
-              >
-                ➕ Nouvel examen
-              </Button>
-            </div>
-            
-            {(patient as any).examinations && (patient as any).examinations.length > 0 ? (
-              <div className="space-y-4">
-                {(patient as any).examinations.map((exam: Examination) => (
-                  <div key={exam.id} className="border rounded-lg p-4 hover:bg-gray-50">
-                    <div className="flex items-center justify-between">
-                      <div className="flex-1">
-                        <div className="flex items-center space-x-3">
-                          <Badge className={getStatusColor(exam.status)}>
-                            {getStatusLabel(exam.status)}
-                          </Badge>
-                          <span className="font-medium">{exam.modality} - {exam.examType}</span>
-                          <span className="text-sm text-gray-500">#{exam.accessionNumber}</span>
-                        </div>
-                        <p className="text-sm text-gray-600 mt-1">
-                          Programmé le {formatDate(exam.scheduledDate)}
-                        </p>
-                      </div>
-                      
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => window.open(`/examinations/${exam.id}`, '_blank')}
-                      >
-                        Voir
-                      </Button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <div className="text-center py-12 text-gray-500">
-                <div className="text-4xl mb-3">🔬</div>
-                <p>Aucun examen enregistré</p>
-                <p className="text-sm mt-1">Créez le premier examen pour ce patient</p>
-              </div>
-            )}
-          </Card>
+          <PatientExaminationHistory patientId={patient.id} />
         )}
 
         {activeTab === 'history' && (

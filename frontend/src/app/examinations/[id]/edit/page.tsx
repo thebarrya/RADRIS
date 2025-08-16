@@ -2,7 +2,8 @@
 
 import { useState, useEffect } from 'react';
 import { useSession } from 'next-auth/react';
-import { redirect, useParams, useRouter } from 'next/navigation';
+import { redirect, useParams } from 'next/navigation';
+import { useNavigation } from '@/hooks/useNavigation';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { EditExaminationForm } from '@/components/examinations/EditExaminationForm';
 import { Button } from '@/components/ui/button';
@@ -12,7 +13,7 @@ import { examinationsApi } from '@/lib/api';
 export default function EditExaminationPage() {
   const { data: session, status } = useSession();
   const params = useParams();
-  const router = useRouter();
+  const { navigateTo } = useNavigation();
   const examinationId = params.id as string;
   
   const [examination, setExamination] = useState<Examination | null>(null);
@@ -53,7 +54,7 @@ export default function EditExaminationPage() {
   }
 
   const handleExaminationUpdated = () => {
-    router.push(`/examinations/${examinationId}`);
+    navigateTo(`/examinations/${examinationId}`);
   };
 
   if (error) {
@@ -101,7 +102,7 @@ export default function EditExaminationPage() {
       <EditExaminationForm 
         examination={examination} 
         onExaminationUpdated={handleExaminationUpdated}
-        onCancel={() => router.push(`/examinations/${examinationId}`)}
+        onCancel={() => navigateTo(`/examinations/${examinationId}`)}
       />
     </AppLayout>
   );

@@ -113,7 +113,7 @@ export const patientsApi = {
   
   delete: (id: string) => api.delete(`/patients/${id}`),
   
-  search: (searchParams: any) => api.post('/patients/search', searchParams),
+  search: (searchParams: any) => api.get('/patients/search/advanced', { params: searchParams }),
 };
 
 export const examinationsApi = {
@@ -181,7 +181,7 @@ export const dicomApi = {
     api.post(`/dicom/sync-examination/${examinationId}`),
   
   getViewerConfig: (examinationId: string) =>
-    api.get(`/dicom/viewer/config/${examinationId}`),
+    api.get(`/dicom/viewer-config/${examinationId}`),
 };
 
 export default api;

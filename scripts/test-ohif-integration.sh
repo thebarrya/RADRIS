@@ -1,127 +1,119 @@
 #!/bin/bash
 
-# Test script for OHIF viewer integration with RADRIS
-echo "Testing OHIF viewer integration with RADRIS system..."
+echo "=== RADRIS OHIF Integration Test ==="
+echo
 
-# Colors for output
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-BLUE='\033[0;34m'
-NC='\033[0m' # No Color
-
-# Function to print colored output
-print_status() {
-    local status=$1
-    local message=$2
-    case $status in
-        "SUCCESS") echo -e "${GREEN}✅ $message${NC}" ;;
-        "ERROR") echo -e "${RED}❌ $message${NC}" ;;
-        "WARNING") echo -e "${YELLOW}⚠️ $message${NC}" ;;
-        "INFO") echo -e "${BLUE}ℹ️ $message${NC}" ;;
-    esac
-}
-
-# Test function
-test_endpoint() {
-    local name=$1
-    local url=$2
-    local expected_status=${3:-200}
-    
-    echo -n "Testing $name... "
-    local response=$(curl -s -w "%{http_code}" -o /dev/null "$url" 2>/dev/null)
-    
-    if [ "$response" = "$expected_status" ]; then
-        print_status "SUCCESS" "$name is accessible ($url)"
-        return 0
-    else
-        print_status "ERROR" "$name is not accessible - HTTP $response ($url)"
-        return 1
-    fi
-}
-
-# Check if services are running
-print_status "INFO" "Checking if RADRIS services are running..."
-
-# Test core services
-test_endpoint "Frontend" "http://localhost:3000" 200
-test_endpoint "Backend API" "http://localhost:3001" 404
-test_endpoint "OHIF Viewer" "http://localhost:3005" 200
-test_endpoint "Orthanc PACS" "http://localhost:8042/system" 200
-
-# Test DICOMweb endpoints
-print_status "INFO" "Testing DICOMweb endpoints..."
-test_endpoint "DICOMweb Studies" "http://localhost:8042/dicom-web/studies" 200
-test_endpoint "WADO-URI" "http://localhost:8042/wado" 400
-test_endpoint "Orthanc Explorer 2" "http://localhost:8042/ui/app/" 200
-
-# Test OHIF configuration
-print_status "INFO" "Testing OHIF viewer configuration..."
-test_endpoint "OHIF Viewer Root" "http://localhost:3005/" 200
-
-# Check if app-config.js is accessible
-if curl -s "http://localhost:3005/app-config.js" | grep -q "window.config"; then
-    print_status "SUCCESS" "OHIF configuration file is accessible and contains config"
+# Test 1: CORS Proxy Basic Connectivity
+echo "1. Testing CORS proxy basic connectivity..."
+response=$(curl -s -o /dev/null -w "%{http_code}" "http://localhost:8043/system")
+if [ "$response" = "200" ]; then
+    echo "✅ CORS proxy (port 8043) is responding"
 else
-    print_status "ERROR" "OHIF configuration file is not accessible or invalid"
+    echo "❌ CORS proxy failed with HTTP $response"
+    exit 1
 fi
 
-# Test OHIF viewer with a test URL (should load the viewer interface)
-test_url="http://localhost:3005/viewer?datasources=dicomweb&StudyInstanceUIDs=test"
-if curl -s "$test_url" | grep -q "ohif"; then
-    print_status "SUCCESS" "OHIF viewer interface loads correctly"
+# Test 2: CORS Headers for OHIF Origin
+echo "2. Testing CORS headers for OHIF origin..."
+cors_header=$(curl -s -I -H "Origin: http://localhost:3005" http://localhost:8043/dicom-web/studies | grep -i "access-control-allow-origin")
+if [[ "$cors_header" == *"*"* ]]; then
+    echo "✅ CORS headers properly configured"
 else
-    print_status "WARNING" "OHIF viewer interface may not be loading correctly"
+    echo "❌ CORS headers missing or incorrect"
+    exit 1
 fi
 
-# Test frontend test endpoint
-print_status "INFO" "Testing frontend API endpoints..."
-if curl -s "http://localhost:3000/api/test-viewer" | grep -q "Test viewer endpoint working"; then
-    print_status "SUCCESS" "Frontend test viewer endpoint is working"
+# Test 3: DICOM-Web Studies Endpoint
+echo "3. Testing DICOM-Web studies endpoint..."
+studies_count=$(curl -s -H "Origin: http://localhost:3005" http://localhost:8043/dicom-web/studies | jq 'length' 2>/dev/null)
+if [ "$studies_count" -gt 0 ]; then
+    echo "✅ DICOM-Web studies accessible ($studies_count studies found)"
 else
-    print_status "WARNING" "Frontend test viewer endpoint is not accessible"
+    echo "❌ DICOM-Web studies endpoint failed"
+    exit 1
 fi
 
-# Test Orthanc plugin configuration
-print_status "INFO" "Checking Orthanc plugin configuration..."
-if curl -s "http://localhost:8042/plugins" 2>/dev/null | grep -q "dicom-web"; then
-    print_status "SUCCESS" "DICOMweb plugin is loaded in Orthanc"
+# Test 4: Get Sample Study for Testing
+echo "4. Getting sample study for testing..."
+first_study_id=$(curl -s http://localhost:8042/studies | jq -r '.[0]')
+study_uid=$(curl -s "http://localhost:8042/studies/$first_study_id" | jq -r '.MainDicomTags.StudyInstanceUID')
+echo "   Using StudyInstanceUID: $study_uid"
+
+# Test 5: Study Metadata Access via CORS Proxy
+echo "5. Testing study metadata access..."
+metadata_count=$(curl -s -H "Origin: http://localhost:3005" "http://localhost:8043/dicom-web/studies/$study_uid/metadata" | jq 'length' 2>/dev/null)
+if [ "$metadata_count" -gt 0 ]; then
+    echo "✅ Study metadata accessible ($metadata_count instances)"
 else
-    print_status "ERROR" "DICOMweb plugin is not loaded in Orthanc"
+    echo "❌ Study metadata access failed"
+    exit 1
 fi
 
-if curl -s "http://localhost:8042/plugins" 2>/dev/null | grep -q "orthanc-explorer-2"; then
-    print_status "SUCCESS" "OrthancExplorer2 plugin is loaded"
+# Test 6: Series Access via CORS Proxy
+echo "6. Testing series access..."
+series_count=$(curl -s -H "Origin: http://localhost:3005" "http://localhost:8043/dicom-web/studies/$study_uid/series" | jq 'length' 2>/dev/null)
+if [ "$series_count" -gt 0 ]; then
+    echo "✅ Series data accessible ($series_count series)"
 else
-    print_status "WARNING" "OrthancExplorer2 plugin may not be loaded"
+    echo "❌ Series access failed"
+    exit 1
 fi
 
-echo ""
-print_status "INFO" "OHIF Integration Test Summary:"
-echo ""
+# Test 7: Root DICOM-Web Endpoint (OHIF discovery)
+echo "7. Testing root DICOM-Web endpoint for OHIF discovery..."
+root_response=$(curl -s -H "Origin: http://localhost:3005" "http://localhost:8043/dicom-web")
+if [[ "$root_response" == "{}" ]]; then
+    echo "✅ Root DICOM-Web endpoint returns proper JSON"
+else
+    echo "❌ Root DICOM-Web endpoint failed"
+    echo "   Response: $root_response"
+    exit 1
+fi
 
-# Final recommendations
-echo "📋 Next Steps for Testing:"
-echo ""
-echo "1. Upload test DICOM files:"
-echo "   - Use Orthanc Explorer 2: http://localhost:8042/ui/app/"
-echo "   - Or use the upload script: ./scripts/upload-test-dicom.sh"
-echo ""
-echo "2. Test OHIF viewer with real data:"
-echo "   - Browse studies in Orthanc Explorer 2"
-echo "   - Click 'OHIF Viewer' button for any study"
-echo "   - Verify images load correctly"
-echo ""
-echo "3. Test from RADRIS frontend:"
-echo "   - Access RADRIS at: http://localhost:3000"
-echo "   - Navigate to worklist or examinations"
-echo "   - Click the viewer icon (🖼️) for any examination"
-echo ""
-echo "4. Check logs if issues occur:"
-echo "   - Frontend: docker-compose logs frontend"
-echo "   - Backend: docker-compose logs backend"
-echo "   - Orthanc: docker-compose logs orthanc"
-echo "   - OHIF: docker-compose logs ohif-viewer"
+# Test 8: OHIF Viewer Internal Configuration
+echo "8. Testing OHIF viewer internal configuration..."
+ohif_internal_test=$(docker exec radris-ohif curl -s "http://orthanc-cors-proxy:8043/dicom-web/studies" | jq 'length' 2>/dev/null)
+if [ "$ohif_internal_test" -gt 0 ]; then
+    echo "✅ OHIF can access DICOM-Web internally ($ohif_internal_test studies)"
+else
+    echo "❌ OHIF internal DICOM-Web access failed"
+    exit 1
+fi
 
-echo ""
-print_status "INFO" "Test completed. Check the status messages above for any issues."
+# Test 9: OHIF Viewer Response
+echo "9. Testing OHIF viewer response..."
+ohif_url="http://localhost:3005/viewer?StudyInstanceUIDs=$study_uid&datasources=dicomweb"
+ohif_response=$(curl -s -o /dev/null -w "%{http_code}" "$ohif_url")
+if [ "$ohif_response" = "200" ]; then
+    echo "✅ OHIF viewer accessible"
+    echo "   URL: $ohif_url"
+else
+    echo "❌ OHIF viewer failed with HTTP $ohif_response"
+    exit 1
+fi
+
+# Test 10: RADRIS Frontend Response
+echo "10. Testing RADRIS frontend..."
+frontend_response=$(curl -s -o /dev/null -w "%{http_code}" "http://localhost:3000")
+if [ "$frontend_response" = "307" ] || [ "$frontend_response" = "200" ]; then
+    echo "✅ RADRIS frontend accessible"
+else
+    echo "❌ RADRIS frontend failed with HTTP $frontend_response"
+    exit 1
+fi
+
+echo
+echo "🎉 All tests passed! OHIF integration is working properly."
+echo
+echo "📋 Summary:"
+echo "   - CORS proxy: ✅ Working on port 8043"
+echo "   - DICOM-Web API: ✅ $studies_count studies available"
+echo "   - Study metadata: ✅ $metadata_count instances"
+echo "   - Series data: ✅ $series_count series"
+echo "   - OHIF viewer: ✅ Accessible"
+echo "   - RADRIS frontend: ✅ Running"
+echo
+echo "🔗 Test OHIF URL:"
+echo "$ohif_url"
+echo
+echo "🚀 You can now use the OHIF Viewer buttons in the RADRIS frontend!"

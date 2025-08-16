@@ -1,0 +1,277 @@
+'use client';
+
+import React, { useRef, useEffect, useState } from 'react';
+import { Card } from '@/components/ui/card';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Button } from '@/components/ui/button';
+import { ViewerToolbar } from './ViewerToolbar';
+import { ViewerControls, WindowingPreset } from './ViewerControls';
+import { useCornerstone } from '@/hooks/useCornerstone';
+import { ToolName } from '@/lib/cornerstone';
+import { AlertCircle, Loader2, Layout, Maximize2, Minimize2 } from 'lucide-react';
+
+interface CornerstoneViewerProps {
+  studyInstanceUID: string;
+  onError?: (error: string) => void;
+  className?: string;
+}
+
+export function CornerstoneViewer({ 
+  studyInstanceUID, 
+  onError,
+  className = '' 
+}: CornerstoneViewerProps) {
+  const viewportRef = useRef<HTMLDivElement>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  const [controlsCollapsed, setControlsCollapsed] = useState(false);
+  const [layout, setLayout] = useState<'single' | 'dual' | 'quad'>('single');
+
+  const {
+    isInitialized,
+    error: cornerstoneError,
+    activeTool,
+    viewportSettings,
+    setActiveTool,
+    updateViewportSettings,
+    resetViewport,
+    loadStudy,
+    enableElement,
+    disableElement,
+  } = useCornerstone();
+
+  // Initialize viewport when Cornerstone is ready
+  useEffect(() => {
+    if (!isInitialized || !viewportRef.current) return;
+
+    const initViewport = async () => {
+      try {
+        setIsLoading(true);
+        await enableElement(viewportRef.current!, 'viewport-1');
+        
+        if (studyInstanceUID) {
+          await loadStudy(studyInstanceUID);
+        }
+        
+        setIsLoading(false);
+      } catch (err) {
+        const errorMessage = err instanceof Error ? err.message : 'Failed to initialize viewer';
+        console.error('Viewport initialization error:', err);
+        onError?.(errorMessage);
+        setIsLoading(false);
+      }
+    };
+
+    initViewport();
+
+    return () => {
+      disableElement('viewport-1');
+    };
+  }, [isInitialized, studyInstanceUID, enableElement, disableElement, loadStudy, onError]);
+
+  // Handle tool changes
+  const handleToolChange = (toolName: ToolName) => {
+    setActiveTool(toolName);
+  };
+
+  // Handle windowing preset selection
+  const handlePresetSelect = (preset: WindowingPreset) => {
+    updateViewportSettings({
+      windowWidth: preset.windowWidth,
+      windowCenter: preset.windowCenter,
+    });
+  };
+
+  // Handle image manipulation
+  const handleRotate = (direction: 'left' | 'right') => {
+    const newRotation = direction === 'left' 
+      ? viewportSettings.rotation - 15 
+      : viewportSettings.rotation + 15;
+    updateViewportSettings({ rotation: newRotation % 360 });
+  };
+
+  const handleFlip = (direction: 'horizontal' | 'vertical') => {
+    if (direction === 'horizontal') {
+      updateViewportSettings({ hflip: !viewportSettings.hflip });
+    } else {
+      updateViewportSettings({ vflip: !viewportSettings.vflip });
+    }
+  };
+
+  const handleInvert = () => {
+    updateViewportSettings({ invert: !viewportSettings.invert });
+  };
+
+  const handleFitToWindow = () => {
+    updateViewportSettings({ zoom: 1 });
+  };
+
+  const handleDownload = () => {
+    // TODO: Implement download functionality
+    console.log('Download image');
+  };
+
+  const handleShare = () => {
+    // TODO: Implement share functionality
+    console.log('Share image');
+  };
+
+  const handleSettings = () => {
+    // TODO: Implement settings modal
+    console.log('Open settings');
+  };
+
+  const toggleFullscreen = () => {
+    setIsFullscreen(!isFullscreen);
+    // TODO: Implement actual fullscreen functionality
+  };
+
+  const toggleLayout = () => {
+    const layouts: Array<'single' | 'dual' | 'quad'> = ['single', 'dual', 'quad'];
+    const currentIndex = layouts.indexOf(layout);
+    const nextIndex = (currentIndex + 1) % layouts.length;
+    setLayout(layouts[nextIndex]);
+    // TODO: Implement multi-viewport layout
+  };
+
+  if (cornerstoneError) {
+    return (
+      <Alert className={className}>
+        <AlertCircle className="h-4 w-4" />
+        <AlertDescription>
+          Erreur d'initialisation du viewer: {cornerstoneError}
+        </AlertDescription>
+      </Alert>
+    );
+  }
+
+  if (!isInitialized) {
+    return (
+      <Card className={`flex items-center justify-center h-96 ${className}`}>
+        <div className="flex items-center gap-2">
+          <Loader2 className="h-6 w-6 animate-spin" />
+          <span>Initialisation du viewer DICOM...</span>
+        </div>
+      </Card>
+    );
+  }
+
+  return (
+    <div className={`flex flex-col h-full ${className}`}>
+      {/* Toolbar */}
+      <ViewerToolbar
+        activeTool={activeTool}
+        onToolChange={handleToolChange}
+        onReset={resetViewport}
+        onRotate={handleRotate}
+        onFlip={handleFlip}
+        onInvert={handleInvert}
+        onFitToWindow={handleFitToWindow}
+        onDownload={handleDownload}
+        onShare={handleShare}
+        onSettings={handleSettings}
+        disabled={isLoading}
+      />
+
+      <div className="flex flex-1 min-h-0">
+        {/* Main Viewer Area */}
+        <div className="flex-1 flex flex-col">
+          {/* Layout Controls */}
+          <div className="flex items-center justify-between p-2 border-b">
+            <div className="flex items-center gap-2">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={toggleLayout}
+                title={`Layout: ${layout}`}
+              >
+                <Layout className="h-4 w-4" />
+              </Button>
+              <span className="text-xs text-muted-foreground">
+                Layout: {layout}
+              </span>
+            </div>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={toggleFullscreen}
+              title={isFullscreen ? 'Quitter le plein écran' : 'Plein écran'}
+            >
+              {isFullscreen ? (
+                <Minimize2 className="h-4 w-4" />
+              ) : (
+                <Maximize2 className="h-4 w-4" />
+              )}
+            </Button>
+          </div>
+
+          {/* Viewport Container */}
+          <div className="flex-1 relative bg-black">
+            {isLoading && (
+              <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-50 z-10">
+                <div className="flex items-center gap-2 text-white">
+                  <Loader2 className="h-6 w-6 animate-spin" />
+                  <span>Chargement des images DICOM...</span>
+                </div>
+              </div>
+            )}
+            
+            {/* Main Viewport */}
+            <div
+              ref={viewportRef}
+              className="w-full h-full"
+              style={{ 
+                minHeight: '400px',
+                cursor: activeTool === 'Pan' ? 'grab' : 
+                       activeTool === 'Zoom' ? 'zoom-in' :
+                       activeTool === 'WindowLevel' ? 'crosshair' : 'crosshair'
+              }}
+            />
+
+            {/* Study Info Overlay */}
+            {!isLoading && (
+              <div className="absolute top-2 left-2 bg-black bg-opacity-70 text-white p-2 rounded text-xs">
+                <div>Study: {studyInstanceUID.slice(0, 20)}...</div>
+                <div>Tool: {activeTool}</div>
+                <div>
+                  WW: {viewportSettings.windowWidth} | 
+                  WC: {viewportSettings.windowCenter}
+                </div>
+                <div>Zoom: {Math.round(viewportSettings.zoom * 100)}%</div>
+              </div>
+            )}
+
+            {/* Measurements Overlay */}
+            <div className="absolute bottom-2 left-2 bg-black bg-opacity-70 text-white p-2 rounded text-xs">
+              {/* TODO: Display active measurements */}
+              <div>Measurements: 0</div>
+            </div>
+          </div>
+        </div>
+
+        {/* Side Controls */}
+        <div className="border-l">
+          <ViewerControls
+            windowWidth={viewportSettings.windowWidth}
+            windowCenter={viewportSettings.windowCenter}
+            zoom={viewportSettings.zoom}
+            rotation={viewportSettings.rotation}
+            invert={viewportSettings.invert}
+            colormap={viewportSettings.colormap}
+            onWindowWidthChange={(value) => updateViewportSettings({ windowWidth: value })}
+            onWindowCenterChange={(value) => updateViewportSettings({ windowCenter: value })}
+            onZoomChange={(value) => updateViewportSettings({ zoom: value })}
+            onRotationChange={(value) => updateViewportSettings({ rotation: value })}
+            onInvertChange={(value) => updateViewportSettings({ invert: value })}
+            onColormapChange={(value) => updateViewportSettings({ colormap: value })}
+            onReset={resetViewport}
+            onPresetSelect={handlePresetSelect}
+            disabled={isLoading}
+            isCollapsed={controlsCollapsed}
+            onToggleCollapse={() => setControlsCollapsed(!controlsCollapsed)}
+          />
+        </div>
+      </div>
+    </div>
+  );
+}

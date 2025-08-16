@@ -100,7 +100,7 @@ export default function ReportsPage() {
               
               <div className="flex items-center space-x-3">
                 <Button asChild>
-                  <Link href="/reports/new" className="flex items-center space-x-2">
+                  <Link href="/reports/new" prefetch={true} className="flex items-center space-x-2">
                     <Plus className="w-4 h-4" />
                     <span>Nouveau rapport</span>
                   </Link>
@@ -224,13 +224,13 @@ export default function ReportsPage() {
                         
                         <div className="flex items-center space-x-2">
                           <Button variant="outline" size="sm" asChild>
-                            <Link href={`/reports/${report.id}/edit`}>
+                            <Link href={`/reports/${report.id}/edit`} prefetch={true}>
                               <Edit className="w-4 h-4 mr-1" />
                               Éditer
                             </Link>
                           </Button>
                           <Button variant="outline" size="sm" asChild>
-                            <Link href={`/reports/${report.id}`}>
+                            <Link href={`/reports/${report.id}`} prefetch={true}>
                               Voir
                             </Link>
                           </Button>

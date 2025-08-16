@@ -1,5 +1,6 @@
 import { FastifyPluginAsync } from 'fastify';
 import { z } from 'zod';
+import { createAuthHandler } from '../utils/auth';
 
 const createExaminationSchema = z.object({
   patientId: z.string(),
@@ -43,13 +44,7 @@ const worklistParamsSchema = z.object({
 });
 
 export const examinationRoutes: FastifyPluginAsync = async (fastify) => {
-  const authenticate = async (request: any, reply: any) => {
-    try {
-      await request.jwtVerify();
-    } catch (err) {
-      reply.send(err);
-    }
-  };
+  const authenticate = createAuthHandler();
 
   // Generate unique accession number
   const generateAccessionNumber = async (): Promise<string> => {
@@ -252,7 +247,20 @@ export const examinationRoutes: FastifyPluginAsync = async (fastify) => {
   // Create examination
   fastify.post('/', { preHandler: authenticate }, async (request) => {
     const data = createExaminationSchema.parse(request.body);
-    const { userId } = request.user as any;
+    let userId = (request.user as any)?.userId;
+
+    // En développement, utiliser l'admin par défaut si pas d'utilisateur authentifié
+    if (!userId && process.env.NODE_ENV === 'development') {
+      const defaultUser = await fastify.prisma.user.findFirst({
+        where: { role: 'ADMIN' },
+        select: { id: true }
+      });
+      userId = defaultUser?.id;
+    }
+
+    if (!userId) {
+      throw new Error('User authentication required');
+    }
 
     const accessionNumber = await generateAccessionNumber();
 
@@ -387,9 +395,33 @@ export const examinationRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.delete('/:id', { preHandler: authenticate }, async (request) => {
     const { id } = request.params as { id: string };
 
+    // Get examination data before deletion for WebSocket broadcast
+    const examination = await fastify.prisma.examination.findUnique({
+      where: { id },
+      include: {
+        patient: {
+          select: {
+            firstName: true,
+            lastName: true,
+          },
+        },
+      },
+    });
+
     await fastify.prisma.examination.delete({
       where: { id },
     });
+
+    // Broadcast WebSocket update (if available)
+    if (fastify.websocket && examination) {
+      fastify.websocket.broadcastExaminationDeleted(
+        examination.id,
+        {
+          patientName: `${examination.patient.firstName} ${examination.patient.lastName}`,
+          accessionNumber: examination.accessionNumber,
+        }
+      );
+    }
 
     return { message: 'Examination deleted successfully' };
   });
@@ -489,6 +521,28 @@ export const examinationRoutes: FastifyPluginAsync = async (fastify) => {
       message: `Bulk action '${action}' applied to ${result.count} examinations`,
       count: result.count,
     };
+  });
+
+  // Get annotations for examination
+  fastify.get('/:id/annotations', { preHandler: authenticate }, async (request) => {
+    const { id: examinationId } = request.params as { id: string };
+    
+    try {
+      // For now, return empty annotations as the feature is being developed
+      // In the future, this would fetch annotations from the database
+      return {
+        success: true,
+        annotations: [],
+        examinationId,
+        timestamp: new Date().toISOString()
+      };
+    } catch (error) {
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Failed to get annotations',
+        annotations: []
+      };
+    }
   });
 
   // Get statistics

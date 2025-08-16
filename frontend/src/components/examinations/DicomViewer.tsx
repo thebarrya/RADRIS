@@ -6,7 +6,10 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Separator } from '@/components/ui/separator';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { DicomService, ViewerConfig } from '@/services/dicomService';
+import { CornerstoneViewer } from './CornerstoneViewer';
+import { SimpleDicomViewer } from './SimpleDicomViewer';
 import { 
   Eye, 
   Monitor, 
@@ -17,7 +20,9 @@ import {
   CheckCircle,
   Calendar,
   User,
-  Hash
+  Hash,
+  Play,
+  Layers
 } from 'lucide-react';
 
 interface DicomViewerProps {
@@ -194,9 +199,49 @@ export function DicomViewer({ examinationId, onSync }: DicomViewerProps) {
 
         <Separator />
 
-        {/* Viewer Options */}
-        <div className="space-y-4">
-          <h4 className="text-sm font-medium">Options de visualisation</h4>
+        {/* Integrated Viewer */}
+        <Tabs defaultValue="simple" className="w-full">
+          <TabsList className="grid w-full grid-cols-3">
+            <TabsTrigger value="simple" className="flex items-center gap-2">
+              <Eye className="h-4 w-4" />
+              Viewer Rapide
+            </TabsTrigger>
+            <TabsTrigger value="integrated" className="flex items-center gap-2">
+              <Layers className="h-4 w-4" />
+              Viewer Intégré
+            </TabsTrigger>
+            <TabsTrigger value="external" className="flex items-center gap-2">
+              <ExternalLink className="h-4 w-4" />
+              Viewers Externes
+            </TabsTrigger>
+          </TabsList>
+          
+          <TabsContent value="simple" className="mt-4">
+            <SimpleDicomViewer
+              studyInstanceUID={viewerConfig.studyInstanceUID}
+              patientName={`${viewerConfig.patient.firstName} ${viewerConfig.patient.lastName}`}
+              patientId={viewerConfig.patient.patientId}
+              accessionNumber={viewerConfig.accessionNumber}
+              modality={viewerConfig.modality}
+              onError={(error) => setError(error)}
+            />
+          </TabsContent>
+          
+          <TabsContent value="integrated" className="mt-4">
+            <div className="border rounded-lg overflow-hidden">
+              <CornerstoneViewer 
+                studyInstanceUID={viewerConfig.studyInstanceUID}
+                examinationId={viewerConfig.studyInstanceUID} // Use studyUID as examination ID
+                onError={(error) => setError(error)}
+                className="h-[600px]"
+              />
+            </div>
+          </TabsContent>
+
+          <TabsContent value="external" className="mt-4">
+            {/* External Viewer Options */}
+            <div className="space-y-4">
+              <h4 className="text-sm font-medium">Options de visualisation externes</h4>
           
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             {/* OHIF Viewer */}
@@ -267,7 +312,9 @@ export function DicomViewer({ examinationId, onSync }: DicomViewerProps) {
               </CardContent>
             </Card>
           </div>
-        </div>
+            </div>
+          </TabsContent>
+        </Tabs>
 
         <Separator />
 

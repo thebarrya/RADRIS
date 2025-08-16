@@ -1,0 +1,121 @@
+import { init as cornerstoneInit } from '@cornerstonejs/core';
+import { init as cornerstoneToolsInit } from '@cornerstonejs/tools';
+import * as dicomImageLoader from '@cornerstonejs/dicom-image-loader';
+
+// Configuration Cornerstone.js pour Next.js
+let isInitialized = false;
+
+export async function initializeCornerstone() {
+  if (isInitialized) return;
+
+  try {
+    // Initialize Cornerstone Core
+    await cornerstoneInit();
+    
+    // Initialize Cornerstone Tools
+    cornerstoneToolsInit();
+
+    // Configure DICOM Image Loader
+    if (typeof dicomImageLoader.configure === 'function') {
+      dicomImageLoader.configure({
+        useWebWorkers: true,
+        webWorkerPath: '/workers/',
+        taskConfiguration: {
+          decodeTask: {
+            loadCodecsOnStartup: true,
+            initializeCodecsOnStartup: true,
+            codecsPath: '/codecs/',
+            usePDFJS: false,
+            strict: false,
+          },
+        },
+      });
+    } else if (dicomImageLoader.default && typeof dicomImageLoader.default.configure === 'function') {
+      dicomImageLoader.default.configure({
+        useWebWorkers: true,
+        webWorkerPath: '/workers/',
+        taskConfiguration: {
+          decodeTask: {
+            loadCodecsOnStartup: true,
+            initializeCodecsOnStartup: true,
+            codecsPath: '/codecs/',
+            usePDFJS: false,
+            strict: false,
+          },
+        },
+      });
+    }
+
+    // Configure WADO-RS if available
+    const wadorsConfig = dicomImageLoader.wadors || dicomImageLoader.default?.wadors;
+    if (wadorsConfig?.configure) {
+      wadorsConfig.configure({
+        beforeSend: (xhr: XMLHttpRequest) => {
+          // Add authentication headers if needed
+          // xhr.setRequestHeader('Authorization', 'Bearer ' + token);
+        },
+      });
+    }
+
+    isInitialized = true;
+    console.log('Cornerstone.js initialized successfully');
+  } catch (error) {
+    console.error('Failed to initialize Cornerstone.js:', error);
+    throw error;
+  }
+}
+
+// Helper function to get WADO-RS image URL
+export function getWADORSImageId(
+  studyInstanceUID: string,
+  seriesInstanceUID: string,
+  sopInstanceUID: string,
+  frame = 0
+): string {
+  const wadoRsRoot = process.env.NEXT_PUBLIC_ORTHANC_URL || 'http://localhost:8042';
+  const baseUrl = `${wadoRsRoot}/dicom-web`;
+  
+  return `wadors:${baseUrl}/studies/${studyInstanceUID}/series/${seriesInstanceUID}/instances/${sopInstanceUID}/frames/${frame + 1}`;
+}
+
+// Helper function to create viewport configuration
+export function createViewportInput(
+  element: HTMLElement,
+  viewportId: string,
+  type: 'stack' | 'volume' = 'stack'
+) {
+  return {
+    viewportId,
+    element,
+    type: type === 'stack' ? 'STACK' : 'ORTHOGRAPHIC',
+  };
+}
+
+// Default viewport settings
+export const DEFAULT_VIEWPORT_SETTINGS = {
+  voi: {
+    windowWidth: 400,
+    windowCenter: 40,
+  },
+  invert: false,
+  pixelReplication: false,
+  rotation: 0,
+  hflip: false,
+  vflip: false,
+  interpolationType: 'LINEAR',
+  colormap: '',
+};
+
+// Tool names constants
+export const TOOL_NAMES = {
+  Pan: 'Pan',
+  Zoom: 'Zoom',
+  WindowLevel: 'WindowLevel',
+  StackScrollMouseWheel: 'StackScrollMouseWheel',
+  Length: 'Length',
+  Angle: 'Angle',
+  RectangleROI: 'RectangleROI',
+  EllipticalROI: 'EllipticalROI',
+} as const;
+
+export type ToolName = typeof TOOL_NAMES[keyof typeof TOOL_NAMES];

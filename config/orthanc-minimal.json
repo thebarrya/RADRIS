@@ -15,42 +15,16 @@
   },
 
   "Plugins": [
-    "/usr/share/orthanc/plugins/libOrthancPostgreSQLIndex.so",
-    "/usr/share/orthanc/plugins/libOrthancGdcm.so",
-    "/usr/share/orthanc/plugins/libOrthancExplorer2.so",
-    "/usr/share/orthanc/plugins/libStoneWebViewer.so"
+    "/usr/share/orthanc/plugins/libOrthancPostgreSQLIndex.so"
   ],
-
-  "OrthancExplorer2": {
-    "Enable": true,
-    "IsDefaultUI": true,
-    "Theme": "dark",
-    "LogLevel": "default",
-    "EnableShares": true,
-    "ShowOrthancName": true,
-    "UiOptions": {
-      "StudyListColumns": [
-        "PatientName",
-        "PatientID", 
-        "StudyDate",
-        "StudyDescription",
-        "AccessionNumber"
-      ]
-    },
-    "Viewers": {
-      "StoneWebViewer": {
-        "Enable": true,
-        "IsDefaultViewer": true
-      }
-    }
-  },
 
   "HttpServerEnabled": true,
   "HttpDescribeErrors": true,
   "HttpCompressionEnabled": true,
   "HttpRequestTimeout": 60,
   
-  "StorageCompression": false,
+  "ConcurrentJobs": 4,
+  "StorageCompression": true,
 
   "HttpHeaders": {
     "Access-Control-Allow-Origin": "*",
@@ -75,14 +49,9 @@
   "LimitFindInstances": 0,
   "MaximumStorageSize": 0,
   "MaximumPatientCount": 0,
-  "ConcurrentJobs": 4,
+
+  "LogLevel": "default",
 
   "StorageDirectory": "/var/lib/orthanc/db",
-  "IndexDirectory": "/var/lib/orthanc/db",
-
-  "StoneWebViewer": {
-    "Enable": true,
-    "DateFormat": "DD/MM/YYYY",
-    "MaxConcurrentLoads": 6
-  }
+  "IndexDirectory": "/var/lib/orthanc/db"
 }

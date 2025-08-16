@@ -149,16 +149,22 @@ check_requirements() {
 install_dependencies() {
     log_info "Installation des dépendances..."
     
-    # Dépendances du projet principal
-    if [ -f "package.json" ]; then
-        log_info "Installation des dépendances du projet principal..."
-        npm install
-    fi
-    
     # Dépendances du backend
     if [ -d "backend" ] && [ -f "backend/package.json" ]; then
         log_info "Installation des dépendances du backend..."
         cd backend
+        
+        # Vérifier et installer les dépendances manquantes
+        if ! npm list ws >/dev/null 2>&1; then
+            log_info "Installation de la dépendance WebSocket..."
+            npm install ws @types/ws
+        fi
+        
+        if ! npm list react-resizable-panels >/dev/null 2>&1; then
+            log_info "Installation de react-resizable-panels..."
+            npm install react-resizable-panels
+        fi
+        
         npm install
         cd ..
     fi
@@ -167,8 +173,26 @@ install_dependencies() {
     if [ -d "frontend" ] && [ -f "frontend/package.json" ]; then
         log_info "Installation des dépendances du frontend..."
         cd frontend
+        
+        # Vérifier et installer les dépendances manquantes pour le frontend
+        if ! npm list react-resizable-panels >/dev/null 2>&1; then
+            log_info "Installation de react-resizable-panels pour le frontend..."
+            npm install react-resizable-panels@3.0.4
+        fi
+        
+        if ! npm list @radix-ui/react-tooltip >/dev/null 2>&1; then
+            log_info "Installation de @radix-ui/react-tooltip..."
+            npm install @radix-ui/react-tooltip
+        fi
+        
         npm install
         cd ..
+    fi
+    
+    # Dépendances du projet principal (si elles existent)
+    if [ -f "package.json" ]; then
+        log_info "Installation des dépendances du projet principal..."
+        npm install
     fi
     
     log_success "Dépendances installées avec succès."
@@ -217,36 +241,151 @@ setup_database() {
 
 # Fonction de nettoyage améliorée
 cleanup() {
-    log_info "Arrêt des services RADRIS..."
+    log_info "🛑 Arrêt des services RADRIS suite à interruption..."
     
-    # Essayer d'arrêter proprement les services
-    if docker-compose down --timeout 30; then
+    # Arrêt des processus Node.js
+    pkill -f "npm run dev" 2>/dev/null || true
+    pkill -f "tsx watch" 2>/dev/null || true
+    pkill -f "next dev" 2>/dev/null || true
+    
+    # Essayer d'arrêter proprement les services Docker
+    if docker-compose down --timeout 30 2>/dev/null; then
         log_success "Services arrêtés proprement"
     else
         log_warning "Arrêt forcé des services..."
-        docker-compose kill
-        docker-compose down --remove-orphans
+        docker-compose kill 2>/dev/null || true
+        docker-compose down --remove-orphans 2>/dev/null || true
     fi
     
+    log_info "✅ Nettoyage terminé."
     exit 0
+}
+
+# Fonction pour afficher l'utilisation des ports
+check_ports() {
+    log_info "🔍 Vérification de l'utilisation des ports RADRIS :"
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    
+    local ports=(3000 3001 3002 3005 5432 6379 8042)
+    local port_names=("Frontend" "Backend API" "WebSocket" "OHIF Viewer" "PostgreSQL" "Redis" "Orthanc PACS")
+    
+    for i in "${!ports[@]}"; do
+        local port="${ports[$i]}"
+        local name="${port_names[$i]}"
+        
+        if lsof -i:"$port" >/dev/null 2>&1; then
+            local pid=$(lsof -t -i:"$port" 2>/dev/null | head -1)
+            local process_name=$(ps -p "$pid" -o comm= 2>/dev/null || echo "unknown")
+            local process_cmd=$(ps -p "$pid" -o args= 2>/dev/null | cut -c1-50 || echo "")
+            echo -e "  ${RED}🔒${NC} Port $port ($name) - Utilisé par $process_name (PID: $pid)"
+            echo -e "      └─ Commande: $process_cmd"
+        else
+            echo -e "  ${GREEN}🟢${NC} Port $port ($name) - Libre"
+        fi
+    done
+    
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo
 }
 
 # Fonction de récupération d'erreurs
 error_recovery() {
     local error_msg="$1"
-    log_error "Erreur détectée: $error_msg"
+    log_error "❌ Erreur détectée: $error_msg"
+    
+    # Diagnostic automatique
+    log_info "🔍 Diagnostic automatique..."
+    
+    # Vérifier l'utilisation des ports
+    log_info "Vérification des ports..."
+    check_ports
     
     # Afficher les logs des services pour le débogage
-    log_info "Affichage des logs des services pour le débogage..."
-    docker-compose logs --tail=20
+    log_info "📋 Logs récents des services :"
+    docker-compose logs --tail=10 2>/dev/null || {
+        log_warning "Impossible d'obtenir les logs Docker Compose"
+    }
+    
+    # Vérifier l'espace disque
+    log_info "💾 Espace disque disponible :"
+    df -h . | tail -1 | awk '{print "  Disponible: " $4 " (utilisé: " $5 ")"}'
+    
+    # Vérifier la mémoire
+    log_info "🧠 Mémoire système :"
+    if command -v free >/dev/null 2>&1; then
+        free -h | grep "Mem:" | awk '{print "  Disponible: " $7 " / " $2}'
+    elif command -v vm_stat >/dev/null 2>&1; then
+        # macOS
+        local pages_free=$(vm_stat | grep "Pages free" | awk '{print $3}' | tr -d '.')
+        local page_size=4096
+        local free_mb=$(( pages_free * page_size / 1024 / 1024 ))
+        echo "  Disponible: ~${free_mb}MB"
+    fi
     
     # Proposer des options de récupération
     echo
-    log_info "Options de récupération:"
-    echo "  1. Redémarrer tous les services (./start.sh restart)"
-    echo "  2. Nettoyer et redémarrer (./start.sh clean)"
-    echo "  3. Afficher les logs complets (./start.sh logs)"
-    echo "  4. Vérifier le statut (./start.sh status)"
+    log_info "🛠️  Options de récupération automatique :"
+    echo "  1. Redémarrer tous les services     : ./start.sh restart"
+    echo "  2. Arrêt et redémarrage complet     : ./start.sh reset"  
+    echo "  3. Arrêt forcé puis redémarrage     : ./start.sh force-stop && ./start.sh dev"
+    echo "  4. Nettoyer et redémarrer           : ./start.sh clean && ./start.sh dev"
+    echo "  5. Afficher les logs complets       : ./start.sh logs"
+    echo "  6. Vérifier le statut détaillé      : ./start.sh status"
+    echo "  7. Vérifier uniquement les ports    : ./start.sh ports"
+    echo
+}
+
+# Fonction de diagnostic système
+diagnose_system() {
+    log_info "🩺 Diagnostic système RADRIS..."
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    
+    # Version des outils
+    log_info "📋 Versions des outils :"
+    echo "  Docker: $(docker --version 2>/dev/null || echo 'Non installé')"
+    echo "  Docker Compose: $(docker-compose --version 2>/dev/null || echo 'Non installé')"
+    echo "  Node.js: $(node --version 2>/dev/null || echo 'Non installé')"
+    echo "  npm: $(npm --version 2>/dev/null || echo 'Non installé')"
+    echo
+    
+    # État de Docker
+    log_info "🐳 État de Docker :"
+    if docker info >/dev/null 2>&1; then
+        echo -e "  ${GREEN}✓${NC} Docker daemon actif"
+        echo "  Containers en cours: $(docker ps -q | wc -l)"
+        echo "  Images disponibles: $(docker images -q | wc -l)"
+    else
+        echo -e "  ${RED}✗${NC} Docker daemon inactif"
+    fi
+    echo
+    
+    # Vérification des fichiers de configuration
+    log_info "📁 Fichiers de configuration :"
+    local config_files=("docker-compose.yml" "backend/package.json" "frontend/package.json" "config/orthanc.json")
+    for file in "${config_files[@]}"; do
+        if [ -f "$file" ]; then
+            echo -e "  ${GREEN}✓${NC} $file"
+        else
+            echo -e "  ${RED}✗${NC} $file - Manquant"
+        fi
+    done
+    echo
+    
+    # Ports et processus
+    check_ports
+    
+    # Espace disque et mémoire
+    log_info "💾 Ressources système :"
+    df -h . | tail -1 | awk '{print "  Espace disque: " $4 " disponible (" $5 " utilisé)"}'
+    
+    # Résumé des services
+    if docker-compose ps >/dev/null 2>&1; then
+        echo
+        log_info "📊 État des services Docker :"
+        docker-compose ps --format "table {{.Service}}\t{{.Status}}"
+    fi
+    
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     echo
 }
 
@@ -255,37 +394,37 @@ trap cleanup SIGINT SIGTERM
 
 # Détection de la version RADRIS
 detect_radris_version() {
-    local has_v2_features=0
+    local has_features=0
     
-    # Vérifier la présence des fichiers v2.0
-    if [ -f "config/ohif-v3-config.js" ]; then
-        has_v2_features=$((has_v2_features + 1))
+    # Vérifier la présence des composants essentiels
+    if [ -f "docker-compose.yml" ]; then
+        has_features=$((has_features + 1))
     fi
     
-    if [ -f "config/nginx-ohif-v3.conf" ]; then
-        has_v2_features=$((has_v2_features + 1))
+    if [ -f "config/orthanc.json" ]; then
+        has_features=$((has_features + 1))
     fi
     
-    if [ -f "scripts/upgrade-docker-stack.sh" ]; then
-        has_v2_features=$((has_v2_features + 1))
+    if [ -d "frontend" ] && [ -d "backend" ]; then
+        has_features=$((has_features + 1))
     fi
     
     # Vérifier la configuration Orthanc pour PostgreSQL
-    if grep -q "libOrthancPostgreSQLIndex.so" config/orthanc.json 2>/dev/null; then
-        has_v2_features=$((has_v2_features + 1))
+    if grep -q "PostgreSQL\|postgresql" config/orthanc.json 2>/dev/null; then
+        has_features=$((has_features + 1))
     fi
     
-    # Vérifier docker-compose pour les nouvelles versions
-    if grep -q "orthancteam/orthanc:24.12.0\|ohif/viewer:v3.11.0" docker-compose.yml 2>/dev/null; then
-        has_v2_features=$((has_v2_features + 1))
+    # Vérifier les services WebSocket
+    if grep -q "WebSocket\|websocket" backend/src/services/websocket.ts 2>/dev/null; then
+        has_features=$((has_features + 1))
     fi
     
-    if [ $has_v2_features -ge 3 ]; then
-        log_success "🚀 RADRIS v2.0 détecté avec optimisations"
+    if [ $has_features -ge 4 ]; then
+        log_success "🚀 RADRIS avec WebSocket et optimisations détecté"
         return 0
     else
-        log_info "📦 RADRIS v1.x détecté"
-        log_info "💡 Utilisez './start.sh upgrade' pour migrer vers v2.0"
+        log_info "📦 RADRIS de base détecté"
+        log_info "💡 Utilisez './start.sh upgrade' pour mettre à jour"
         return 1
     fi
 }
@@ -318,8 +457,8 @@ start_development() {
     # Vérifier et télécharger les images nécessaires
     log_info "Vérification des images Docker..."
     
-    # Images requises pour RADRIS v2.0
-    required_images=("postgres:15" "redis:7-alpine" "orthancteam/orthanc:25.7.0" "ohif/viewer:latest")
+    # Images requises pour RADRIS
+    required_images=("postgres:15" "redis:7-alpine" "orthancteam/orthanc:latest" "ohif/viewer:latest")
     
     for image in "${required_images[@]}"; do
         if ! docker images | grep -q "${image%:*}.*${image#*:}"; then
@@ -437,19 +576,20 @@ start_development() {
     echo
     log_success "RADRIS démarré avec succès!"
     echo
-    log_info "🌟 Services RADRIS v2.0 disponibles :"
+    log_info "🌟 Services RADRIS disponibles :"
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     echo "  📱 Frontend RADRIS (Interface RIS)   : http://localhost:3000"
     echo "  🔧 Backend API (Fastify + Prisma)    : http://localhost:3001"
-    echo "  🏥 PACS Orthanc 24.12.0              : http://localhost:8042"
+    echo "  🔌 WebSocket (Temps réel)            : ws://localhost:3002"
+    echo "  🏥 PACS Orthanc                      : http://localhost:8042"
     echo "     ├─ 🎯 Orthanc Explorer 2 (Modern) : http://localhost:8042/ui/app/"
     echo "     ├─ 👁️  Stone Web Viewer (Intégré)  : http://localhost:8042/ui/app/stone-webviewer/"
     echo "     ├─ 📡 API DICOMweb (QIDO/WADO)    : http://localhost:8042/dicom-web/"
     echo "     ├─ 🌐 WADO-URI (Legacy)           : http://localhost:8042/wado"
     echo "     └─ 🔍 Explorer Orthanc (Classic)  : http://localhost:8042/app/explorer.html"
-    echo "  👁️  OHIF Viewer v3.11.0              : http://localhost:3005"
-    echo "  🗄️  PostgreSQL 15 (Backend + Index)  : localhost:5432"
-    echo "  🚀 Redis 7 (Cache + Queues)         : localhost:6379"
+    echo "  👁️  OHIF Viewer                      : http://localhost:3005"
+    echo "  🗄️  PostgreSQL (Backend + Index)     : localhost:5432"
+    echo "  🚀 Redis (Cache + Queues)            : localhost:6379"
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     echo
     
@@ -462,15 +602,15 @@ start_development() {
     
     # Afficher les instructions finales
     echo
-    log_info "💡 Nouvelles fonctionnalités RADRIS v2.0 :"
-    echo "  🚀 Performance améliorée avec PostgreSQL backend"
+    log_info "💡 Fonctionnalités RADRIS disponibles :"
+    echo "  🚀 Performance optimisée avec PostgreSQL backend"
     echo "  📊 Cache métadonnées DICOMweb activé"
-    echo "  🎯 OHIF v3.11.0 avec extensions modernes"
-    echo "  🔧 8 jobs concurrents Orthanc (vs 4 précédemment)"
+    echo "  🎯 OHIF Viewer avec extensions modernes"
+    echo "  🔌 WebSocket pour mises à jour temps réel"
     echo "  💾 Compression de stockage activée"
     echo "  🛡️  Health checks Docker intégrés"
     echo
-    log_info "🎮 RADRIS v2.0 est maintenant en cours d'exécution!"
+    log_info "🎮 RADRIS est maintenant en cours d'exécution!"
     log_info "Utilisez 'Ctrl+C' pour arrêter tous les services"
     log_info "Ou utilisez './start.sh stop' depuis un autre terminal"
     log_info "Pour plus d'options : './start.sh help'"
@@ -479,30 +619,35 @@ start_development() {
 
 # Fonction d'aide
 show_help() {
-    echo "🏥 RADRIS v2.0 - Script de lancement optimisé"
+    echo "🏥 RADRIS - Script de lancement optimisé"
     echo
     echo "Usage: $0 [OPTION]"
     echo
     echo "Options principales :"
     echo "  dev, development    Démarrer en mode développement (défaut)"
     echo "  prod, production    Démarrer en mode production"
-    echo "  stop               Arrêter tous les services"
+    echo "  stop               Arrêter tous les services proprement"
+    echo "  force-stop         Arrêter tous les services de force"
     echo "  restart            Redémarrer tous les services"
     echo "  status             Afficher le statut détaillé des services"
-    echo "  upgrade            Exécuter la mise à jour vers RADRIS v2.0"
+    echo "  upgrade            Mettre à jour les composants RADRIS"
     echo
     echo "Options de maintenance :"
     echo "  logs               Afficher les logs en temps réel"
+    echo "  logs [service]     Afficher les logs d'un service spécifique"
     echo "  clean              Nettoyer les containers et volumes"
+    echo "  reset              Arrêter, nettoyer et redémarrer complètement"
+    echo "  ports              Vérifier l'utilisation des ports"
+    echo "  diagnose           Diagnostic complet du système"
     echo "  test-dicom         Créer et uploader une image DICOM de test"
     echo "  backup             Créer une sauvegarde des données"
     echo "  help               Afficher cette aide"
     echo
-    echo "🚀 Nouveautés RADRIS v2.0 :"
-    echo "  • Orthanc 24.12.0 avec backend PostgreSQL"
-    echo "  • OHIF v3.11.0 avec extensions modernes"
+    echo "🚀 Fonctionnalités RADRIS :"
+    echo "  • Orthanc PACS avec backend PostgreSQL"
+    echo "  • OHIF Viewer avec extensions modernes"
     echo "  • Stone Web Viewer intégré et optimisé"
-    echo "  • Performance améliorée (×2-3 plus rapide)"
+    echo "  • WebSocket temps réel intégré"
     echo "  • Health checks et monitoring intégrés"
     echo
 }
@@ -510,100 +655,330 @@ show_help() {
 # Fonctions utilitaires
 stop_services() {
     log_info "Arrêt de tous les services RADRIS..."
-    docker-compose down
-    log_success "Services arrêtés."
+    
+    # Arrêt des processus Node.js locaux s'ils existent
+    log_info "Arrêt des processus Node.js locaux..."
+    pkill -f "npm run dev" 2>/dev/null || true
+    pkill -f "tsx watch" 2>/dev/null || true
+    pkill -f "next dev" 2>/dev/null || true
+    pkill -f "node.*start.sh" 2>/dev/null || true
+    
+    # Arrêt des services Docker
+    log_info "Arrêt des services Docker..."
+    if docker-compose down --timeout 30; then
+        log_success "Services Docker arrêtés proprement."
+    else
+        log_warning "Arrêt forcé des services Docker..."
+        docker-compose kill
+        docker-compose down --remove-orphans
+    fi
+    
+    # Nettoyage des ports potentiellement bloqués
+    log_info "Vérification des ports..."
+    local ports=(3000 3001 3002 3005 5432 6379 8042)
+    for port in "${ports[@]}"; do
+        local pid=$(lsof -t -i:"$port" 2>/dev/null || true)
+        if [ ! -z "$pid" ]; then
+            log_warning "Port $port encore utilisé par le processus $pid"
+            # kill -9 "$pid" 2>/dev/null || true
+        fi
+    done
+    
+    log_success "Arrêt complet terminé."
 }
 
 restart_services() {
     log_info "Redémarrage des services RADRIS..."
-    docker-compose down
-    sleep 2
+    
+    # Arrêt complet
+    stop_services
+    
+    # Attendre que les ports se libèrent
+    log_info "Attente de libération des ports..."
+    sleep 5
+    
+    # Vérification de l'état des services avant redémarrage
+    log_info "Vérification de l'état des services..."
+    if docker ps -q --filter "name=radris-" | wc -l | grep -q "0"; then
+        log_success "Tous les containers RADRIS sont arrêtés."
+    else
+        log_warning "Certains containers sont encore en cours d'arrêt..."
+        sleep 3
+    fi
+    
+    # Redémarrage
+    log_info "Redémarrage en cours..."
     start_development
 }
 
+force_stop() {
+    log_warning "Arrêt forcé de tous les services RADRIS..."
+    
+    # Tuer tous les processus liés à RADRIS
+    log_info "Arrêt forcé des processus Node.js..."
+    pkill -9 -f "npm run dev" 2>/dev/null || true
+    pkill -9 -f "tsx watch" 2>/dev/null || true
+    pkill -9 -f "next dev" 2>/dev/null || true
+    pkill -9 -f "fastify" 2>/dev/null || true
+    
+    # Arrêt forcé des containers Docker
+    log_info "Arrêt forcé des containers Docker..."
+    docker-compose kill 2>/dev/null || true
+    docker-compose down --remove-orphans --timeout 0 2>/dev/null || true
+    
+    # Nettoyage forcé des ports
+    log_info "Libération forcée des ports..."
+    local ports=(3000 3001 3002 3005 5432 6379 8042)
+    for port in "${ports[@]}"; do
+        local pids=$(lsof -t -i:"$port" 2>/dev/null || true)
+        if [ ! -z "$pids" ]; then
+            echo "$pids" | xargs kill -9 2>/dev/null || true
+            log_info "Port $port libéré."
+        fi
+    done
+    
+    log_success "Arrêt forcé terminé."
+}
+
 show_logs() {
-    docker-compose logs -f
+    local service="$1"
+    
+    if [ -z "$service" ]; then
+        log_info "Affichage des logs de tous les services (Ctrl+C pour quitter)..."
+        docker-compose logs -f --tail=50
+    else
+        log_info "Affichage des logs du service '$service' (Ctrl+C pour quitter)..."
+        if docker-compose ps | grep -q "$service"; then
+            docker-compose logs -f --tail=100 "$service"
+        else
+            log_error "Service '$service' introuvable."
+            log_info "Services disponibles :"
+            docker-compose ps --services
+        fi
+    fi
 }
 
 show_status() {
     echo
-    log_info "Statut des services RADRIS :"
-    docker-compose ps
+    log_info "📊 Statut des services RADRIS :"
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    
+    # Statut des containers Docker
+    log_info "🐳 Services Docker :"
+    docker-compose ps --format "table {{.Service}}\t{{.Status}}\t{{.Ports}}" 2>/dev/null || {
+        log_warning "Impossible d'obtenir le statut Docker Compose"
+        docker ps --filter "name=radris-" --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}" 2>/dev/null || true
+    }
     echo
     
-    # Afficher l'état de santé des services web
-    log_info "État de santé des services web :"
+    # Vérification des processus Node.js
+    log_info "⚡ Processus Node.js :"
+    local node_processes=()
     
-    local services=("Frontend:http://localhost:3000" "Backend:http://localhost:3001" "OHIF v3:http://localhost:3005" "Orthanc 24.12.0:http://localhost:8042/system" "DICOMweb API:http://localhost:8042/dicom-web/studies" "Stone Viewer:http://localhost:8042/ui/app/stone-webviewer/" "Explorer 2:http://localhost:8042/ui/app/")
+    # Backend processes
+    if pgrep -f "tsx watch.*src/index.ts" >/dev/null 2>&1; then
+        echo -e "  ${GREEN}✓${NC} Backend (tsx watch) - PID: $(pgrep -f "tsx watch.*src/index.ts")"
+    else
+        echo -e "  ${RED}✗${NC} Backend (tsx watch) - Arrêté"
+    fi
+    
+    # Frontend processes  
+    if pgrep -f "next dev" >/dev/null 2>&1; then
+        echo -e "  ${GREEN}✓${NC} Frontend (next dev) - PID: $(pgrep -f "next dev")"
+    else
+        echo -e "  ${RED}✗${NC} Frontend (next dev) - Arrêté"
+    fi
+    
+    echo
+    
+    # État de santé des services web
+    log_info "🌐 État de santé des services web :"
+    
+    local services=("Frontend:http://localhost:3000" "Backend API:http://localhost:3001/health" "WebSocket:ws://localhost:3002" "OHIF Viewer:http://localhost:3005" "Orthanc PACS:http://localhost:8042/system" "DICOMweb API:http://localhost:8042/dicom-web/studies" "Stone Viewer:http://localhost:8042/ui/app/stone-webviewer/" "Explorer 2:http://localhost:8042/ui/app/")
     
     for service_info in "${services[@]}"; do
         IFS=':' read -r name url <<< "$service_info"
-        if curl -s "$url" >/dev/null 2>&1; then
-            echo -e "  ${GREEN}✓${NC} $name - Accessible"
+        
+        if [[ "$url" == ws://* ]]; then
+            # Test WebSocket avec timeout
+            if timeout 3 bash -c "</dev/tcp/localhost/3002" 2>/dev/null; then
+                echo -e "  ${GREEN}✓${NC} $name - Port ouvert"
+            else
+                echo -e "  ${RED}✗${NC} $name - Port fermé"
+            fi
         else
-            echo -e "  ${RED}✗${NC} $name - Inaccessible"
+            # Test HTTP
+            if curl -s --max-time 3 "$url" >/dev/null 2>&1; then
+                echo -e "  ${GREEN}✓${NC} $name - Accessible"
+                
+                # Test spécial pour le Backend API health
+                if [[ "$name" == "Backend API" ]]; then
+                    local health_response=$(curl -s --max-time 3 "$url" 2>/dev/null || echo "")
+                    if echo "$health_response" | grep -q '"status":"ok"'; then
+                        local ws_clients=$(echo "$health_response" | grep -o '"clients":[0-9]*' | grep -o '[0-9]*' || echo "0")
+                        echo -e "    └─ WebSocket: $ws_clients client(s) connecté(s)"
+                    fi
+                fi
+            else
+                echo -e "  ${RED}✗${NC} $name - Inaccessible"
+            fi
         fi
     done
     
+    # État de la base de données
+    echo
+    log_info "🗄️  État de la base de données :"
+    if docker exec radris-postgres pg_isready -h localhost -p 5432 >/dev/null 2>&1; then
+        echo -e "  ${GREEN}✓${NC} PostgreSQL - Disponible"
+        local db_size=$(docker exec radris-postgres psql -U radris -d radris -t -c "SELECT pg_size_pretty(pg_database_size('radris'));" 2>/dev/null | xargs || echo "N/A")
+        echo -e "    └─ Taille de la DB: $db_size"
+    else
+        echo -e "  ${RED}✗${NC} PostgreSQL - Indisponible"
+    fi
+    
+    if docker exec radris-redis redis-cli ping >/dev/null 2>&1; then
+        echo -e "  ${GREEN}✓${NC} Redis - Disponible"
+        local redis_memory=$(docker exec radris-redis redis-cli info memory | grep "used_memory_human" | cut -d: -f2 | tr -d '\r' || echo "N/A")
+        echo -e "    └─ Mémoire utilisée: $redis_memory"
+    else
+        echo -e "  ${RED}✗${NC} Redis - Indisponible"  
+    fi
+    
     # Vérification des plugins Orthanc
     echo
-    log_info "État des plugins Orthanc :"
-    if plugins=$(curl -s http://localhost:8042/plugins 2>/dev/null); then
+    log_info "🔌 Plugins Orthanc :"
+    if plugins=$(curl -s --max-time 3 http://localhost:8042/plugins 2>/dev/null); then
         echo "$plugins" | jq -r '.[]' 2>/dev/null | while read -r plugin; do
             case "$plugin" in
                 "stone-webviewer") echo -e "  ${GREEN}✓${NC} Stone Web Viewer" ;;
                 "dicom-web") echo -e "  ${GREEN}✓${NC} DICOMweb (QIDO/WADO)" ;;
                 "orthanc-explorer-2") echo -e "  ${GREEN}✓${NC} Orthanc Explorer 2" ;;
                 "gdcm") echo -e "  ${GREEN}✓${NC} GDCM (Image Decoder)" ;;
+                "postgresql-index") echo -e "  ${GREEN}✓${NC} PostgreSQL Index" ;;
+                "postgresql-storage") echo -e "  ${GREEN}✓${NC} PostgreSQL Storage" ;;
                 *) echo -e "  ${BLUE}ℹ${NC} $plugin" ;;
             esac
         done
     else
         echo -e "  ${RED}✗${NC} Impossible de récupérer la liste des plugins"
     fi
+    
+    # Statistiques d'utilisation
+    echo
+    log_info "📈 Statistiques d'utilisation des ports :"
+    local ports=(3000 3001 3002 3005 5432 6379 8042)
+    for port in "${ports[@]}"; do
+        if lsof -i:"$port" >/dev/null 2>&1; then
+            local process=$(lsof -t -i:"$port" 2>/dev/null | head -1)
+            local process_name=$(ps -p "$process" -o comm= 2>/dev/null || echo "unknown")
+            echo -e "  ${GREEN}✓${NC} Port $port - Utilisé par $process_name (PID: $process)"
+        else
+            echo -e "  ${YELLOW}○${NC} Port $port - Libre"
+        fi
+    done
+    
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     echo
 }
 
 clean_services() {
     log_warning "Cette action va supprimer tous les containers et volumes RADRIS."
+    echo "⚠️  Cela inclut :"
+    echo "  - Tous les containers RADRIS"
+    echo "  - Tous les volumes de données"
+    echo "  - Images DICOM stockées"
+    echo "  - Base de données PostgreSQL"
+    echo "  - Cache Redis"
+    echo
     read -p "Êtes-vous sûr ? (y/N) " -n 1 -r
     echo
     if [[ $REPLY =~ ^[Yy]$ ]]; then
         log_info "Nettoyage en cours..."
-        docker-compose down -v --remove-orphans
+        
+        # Arrêt forcé d'abord
+        force_stop
+        
+        # Nettoyage des containers et volumes
+        docker-compose down -v --remove-orphans 2>/dev/null || true
+        
+        # Nettoyage des images RADRIS
+        log_info "Suppression des images Docker inutilisées..."
         docker system prune -f
+        
+        # Nettoyage des réseaux
+        docker network prune -f 2>/dev/null || true
+        
         log_success "Nettoyage terminé."
+        log_info "Utilisez './start.sh dev' pour redémarrer proprement."
     else
         log_info "Nettoyage annulé."
     fi
 }
 
-upgrade_services() {
-    log_info "🚀 Lancement de la mise à jour vers RADRIS v2.0..."
-    
-    if [ -f "./scripts/upgrade-docker-stack.sh" ]; then
-        chmod +x ./scripts/upgrade-docker-stack.sh
-        ./scripts/upgrade-docker-stack.sh
+reset_services() {
+    log_warning "Cette action va complètement réinitialiser RADRIS."
+    echo "🔄 Séquence de réinitialisation :"
+    echo "  1. Arrêt de tous les services"
+    echo "  2. Nettoyage des containers et volumes"
+    echo "  3. Réinstallation des dépendances"
+    echo "  4. Redémarrage complet"
+    echo
+    read -p "Continuer avec la réinitialisation complète ? (y/N) " -n 1 -r
+    echo
+    if [[ $REPLY =~ ^[Yy]$ ]]; then
+        log_info "🔄 Début de la réinitialisation..."
+        
+        # Nettoyage complet
+        force_stop
+        docker-compose down -v --remove-orphans 2>/dev/null || true
+        
+        # Réinstallation des dépendances
+        install_dependencies
+        
+        # Redémarrage
+        log_info "🚀 Redémarrage complet..."
+        start_development
     else
-        log_error "Script de mise à jour introuvable. Veuillez vérifier que ./scripts/upgrade-docker-stack.sh existe."
-        exit 1
+        log_info "Réinitialisation annulée."
     fi
 }
 
-test_dicom() {
-    log_info "🏥 Création et upload d'une image DICOM de test..."
+upgrade_services() {
+    log_info "🚀 Mise à jour des composants RADRIS..."
     
-    if [ -f "./scripts/create-test-dicom.py" ]; then
+    # Mise à jour des images Docker
+    log_info "Mise à jour des images Docker..."
+    docker-compose pull
+    
+    # Mise à jour des dépendances Node.js
+    log_info "Mise à jour des dépendances..."
+    install_dependencies
+    
+    # Redémarrage des services
+    log_info "Redémarrage des services avec les nouvelles versions..."
+    restart_services
+    
+    log_success "Mise à jour terminée !"
+}
+
+test_dicom() {
+    log_info "🏥 Création et upload d'études DICOM de test..."
+    
+    if [ -f "./scripts/create-test-studies.sh" ]; then
         cd scripts
-        python3 create-test-dicom.py
+        chmod +x create-test-studies.sh
+        ./create-test-studies.sh
         cd ..
-        log_success "Image DICOM de test créée et uploadée."
+        log_success "Études DICOM de test créées."
         log_info "Testez les viewers :"
         echo "  • Stone Web Viewer : http://localhost:8042/ui/app/stone-webviewer/"
-        echo "  • OHIF v3.11.0     : http://localhost:3005"
+        echo "  • OHIF Viewer      : http://localhost:3005"
+        echo "  • Orthanc Explorer : http://localhost:8042/app/explorer.html"
     else
-        log_error "Script create-test-dicom.py introuvable."
-        exit 1
+        log_warning "Script de création d'études non trouvé."
+        log_info "Vous pouvez créer manuellement des études DICOM via :"
+        echo "  • Interface Orthanc : http://localhost:8042/app/explorer.html"
+        echo "  • Upload direct     : http://localhost:8042/app/explorer.html#upload"
     fi
 }
 
@@ -644,17 +1019,29 @@ main() {
         "stop")
             stop_services
             ;;
+        "force-stop")
+            force_stop
+            ;;
         "restart")
             restart_services
             ;;
         "logs")
-            show_logs
+            show_logs "$2"
             ;;
         "status")
             show_status
             ;;
         "clean")
             clean_services
+            ;;
+        "reset")
+            reset_services
+            ;;
+        "ports")
+            check_ports
+            ;;
+        "diagnose"|"diag")
+            diagnose_system
             ;;
         "upgrade")
             upgrade_services
@@ -679,11 +1066,12 @@ main() {
 # Information de version au lancement
 if [ "${1:-}" = "" ] || [ "${1:-}" = "dev" ] || [ "${1:-}" = "development" ]; then
     echo
-    echo "🏥 RADRIS v2.0 - Radiology Information System"
+    echo "🏥 RADRIS - Radiology Information System"
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-    echo "🚀 Stack optimisé : Orthanc 25.7.0 + OHIF latest"
-    echo "⚡ Performance améliorée avec PostgreSQL backend"
-    echo "👁️  Viewers : Stone Web Viewer + OHIF v3 moderne"
+    echo "🚀 Stack complet : Orthanc + OHIF + WebSocket"
+    echo "⚡ Performance optimisée avec PostgreSQL backend"
+    echo "👁️  Viewers : Stone Web Viewer + OHIF moderne"
+    echo "🔌 Temps réel : WebSocket pour mises à jour live"
     echo "🛡️  Health checks et monitoring intégrés"
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     echo

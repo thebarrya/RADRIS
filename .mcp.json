@@ -1,0 +1,35 @@
+{
+  "servers": {
+    "docker": {
+      "type": "stdio",
+      "command": "docker",
+      "args": ["compose", "ps"],
+      "description": "Docker Compose management for RADRIS services"
+    },
+    "postgres": {
+      "type": "stdio", 
+      "command": "psql",
+      "args": ["postgresql://radris:radris123@localhost:5432/radris"],
+      "description": "PostgreSQL database access for RADRIS"
+    },
+    "orthanc-api": {
+      "type": "http",
+      "url": "http://localhost:8042",
+      "description": "Orthanc PACS API server"
+    },
+    "redis": {
+      "type": "stdio",
+      "command": "redis-cli",
+      "args": ["-h", "localhost", "-p", "6379"],
+      "description": "Redis cache and queue management"
+    },
+    "context7": {
+      "type": "stdio",
+      "command": "npx",
+      "args": ["@upstash/context7-mcp"],
+      "description": "Context7 MCP server for up-to-date documentation and code examples"
+    }
+  },
+  "description": "MCP configuration for RADRIS RIS-PACS system",
+  "version": "1.0.0"
+}

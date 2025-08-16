@@ -197,6 +197,15 @@ export const reportRoutes: FastifyPluginAsync = async (fastify) => {
       },
     });
 
+    // Broadcast WebSocket update (if available)
+    if (fastify.websocket) {
+      fastify.websocket.broadcastReportCreated(
+        report.id,
+        report,
+        data.examinationId
+      );
+    }
+
     return { report };
   });
 
@@ -218,6 +227,15 @@ export const reportRoutes: FastifyPluginAsync = async (fastify) => {
         },
       },
     });
+
+    // Broadcast WebSocket update (if available)
+    if (fastify.websocket) {
+      fastify.websocket.broadcastReportUpdate(
+        report.id,
+        report,
+        report.examinationId
+      );
+    }
 
     return { report };
   });
@@ -270,6 +288,16 @@ export const reportRoutes: FastifyPluginAsync = async (fastify) => {
           },
         },
       });
+    }
+
+    // Broadcast WebSocket update (if available)
+    if (fastify.websocket) {
+      fastify.websocket.broadcastReportValidated(
+        report.id,
+        report,
+        report.examinationId,
+        userId
+      );
     }
 
     return { report };

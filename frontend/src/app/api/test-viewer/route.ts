@@ -5,7 +5,7 @@ export async function GET(request: NextRequest) {
     // Mock data for testing the OHIF viewer integration
     const testViewerConfig = {
       studyInstanceUID: '1.2.840.113619.2.5.1762583153.215519.978957063.78',
-      wadoRsRoot: 'http://localhost:8042/dicom-web',
+      wadoRsRoot: 'http://localhost:8043/dicom-web',
       ohifViewerUrl: 'http://localhost:3005/viewer',
       orthancViewerUrl: 'http://localhost:8042/ui/app/',
       stoneViewerUrl: 'http://localhost:8042/ui/app/',

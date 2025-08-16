@@ -185,8 +185,49 @@ export class DicomService {
   }
 
   static openOhifViewer(studyInstanceUID: string): void {
-    const ohifUrl = `http://localhost:3005/viewer?datasources=dicomweb&StudyInstanceUIDs=${studyInstanceUID}&url=http://localhost:8042/dicom-web`;
+    const ohifUrl = `http://localhost:3005/viewer?StudyInstanceUIDs=${studyInstanceUID}&datasources=dicomweb`;
     window.open(ohifUrl, '_blank', 'width=1200,height=800,scrollbars=yes,resizable=yes');
+  }
+
+  // Generate OHIF viewer URL without opening window
+  static generateOhifViewerUrl(studyInstanceUID: string): string {
+    return `http://localhost:3005/viewer?StudyInstanceUIDs=${studyInstanceUID}&datasources=dicomweb`;
+  }
+
+  // Test DICOMweb connectivity
+  static async testDicomWebConnection(): Promise<{ 
+    success: boolean; 
+    message: string; 
+    studiesCount?: number;
+    sampleStudyUID?: string;
+  }> {
+    try {
+      const corsProxyUrl = 'http://localhost:8043';
+      const response = await fetch(`${corsProxyUrl}/dicom-web/studies`);
+      
+      if (!response.ok) {
+        return {
+          success: false,
+          message: `DICOMweb endpoint not accessible: ${response.status} ${response.statusText}`
+        };
+      }
+      
+      const studies = await response.json();
+      const sampleStudy = studies.length > 0 ? studies[0] : null;
+      const sampleStudyUID = sampleStudy?.['0020000D']?.Value?.[0];
+      
+      return {
+        success: true,
+        message: `DICOMweb is working! Found ${studies.length} studies`,
+        studiesCount: studies.length,
+        sampleStudyUID
+      };
+    } catch (error) {
+      return {
+        success: false,
+        message: `DICOMweb connection failed: ${error instanceof Error ? error.message : 'Unknown error'}`
+      };
+    }
   }
 
   static async openOrthancViewer(studyInstanceUID: string): Promise<void> {
@@ -251,5 +292,54 @@ export class DicomService {
       'DR': 'Radiographie Directe'
     };
     return modalityNames[modality] || modality;
+  }
+
+  // Auto-discovery operations
+  static async runAutoDiscovery(): Promise<{
+    success: boolean;
+    message: string;
+    data?: {
+      newStudiesFound: number;
+      matchedExaminations: number;
+      unmatchedStudies: number;
+      syncResults: any[];
+    };
+    timestamp: string;
+  }> {
+    const response = await api.post('/dicom/auto-discovery/discover');
+    return response.data;
+  }
+
+  static async getUnmatchedStudies(): Promise<{
+    unmatchedStudies: any[];
+    count: number;
+  }> {
+    const response = await api.get('/dicom/auto-discovery/unmatched-studies');
+    return response.data.data;
+  }
+
+  static async manualLinkStudy(studyInstanceUID: string, examinationId: string): Promise<{
+    success: boolean;
+    message: string;
+    data?: {
+      examinationId: string;
+      studyInstanceUID: string;
+    };
+  }> {
+    const response = await api.post('/dicom/auto-discovery/manual-link', {
+      studyInstanceUID,
+      examinationId
+    });
+    return response.data;
+  }
+
+  static async runScheduledAutoDiscovery(): Promise<{
+    success: boolean;
+    message: string;
+    data?: any;
+    timestamp: string;
+  }> {
+    const response = await api.post('/dicom/auto-discovery/scheduled');
+    return response.data;
   }
 }

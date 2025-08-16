@@ -85,6 +85,13 @@ export function DicomSyncPanel({ onSyncComplete }: DicomSyncPanelProps) {
 
   useEffect(() => {
     loadStats();
+    
+    // Set up periodic stats refresh (every 30 seconds) to keep data current without being aggressive
+    const statsInterval = setInterval(() => {
+      loadStats();
+    }, 30000); // 30 seconds instead of more frequent updates
+    
+    return () => clearInterval(statsInterval);
   }, []);
 
   if (loading) {

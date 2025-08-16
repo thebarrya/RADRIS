@@ -216,7 +216,7 @@ export function QuickActions({ userRole }: QuickActionsProps) {
                 className="w-full justify-start h-auto p-3 hover:bg-gray-50"
                 asChild
               >
-                <Link href={action.href} className="flex items-center space-x-3">
+                <Link href={action.href} prefetch={true} className="flex items-center space-x-3">
                   <div className={`p-2 rounded-lg ${action.bgColor}`}>
                     <Icon className={`w-4 h-4 ${action.color}`} />
                   </div>
@@ -244,7 +244,7 @@ export function QuickActions({ userRole }: QuickActionsProps) {
               className="w-full justify-start border-red-200 text-red-700 hover:bg-red-50"
               asChild
             >
-              <Link href="/examinations?status=emergency" className="flex items-center space-x-2">
+              <Link href="/examinations?status=emergency" prefetch={true} className="flex items-center space-x-2">
                 <AlertTriangle className="w-4 h-4" />
                 <span>Examens d'urgence</span>
               </Link>
@@ -256,7 +256,7 @@ export function QuickActions({ userRole }: QuickActionsProps) {
               className="w-full justify-start border-orange-200 text-orange-700 hover:bg-orange-50"
               asChild
             >
-              <Link href="/reports?priority=urgent" className="flex items-center space-x-2">
+              <Link href="/reports?priority=urgent" prefetch={true} className="flex items-center space-x-2">
                 <FileText className="w-4 h-4" />
                 <span>Rapports urgents</span>
               </Link>

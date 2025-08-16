@@ -12,6 +12,7 @@ import { cn } from '@/lib/utils';
 import { examinationsApi } from '@/lib/api';
 import { ViewerService } from '@/services/viewerService';
 import { DicomViewer } from './DicomViewer';
+import { useNavigation } from '@/hooks/useNavigation';
 import toast from 'react-hot-toast';
 
 interface ExaminationDetailViewProps {
@@ -22,6 +23,7 @@ interface ExaminationDetailViewProps {
 export function ExaminationDetailView({ examination, onExaminationUpdated }: ExaminationDetailViewProps) {
   const [activeTab, setActiveTab] = useState<'info' | 'patient' | 'reports' | 'history' | 'dicom'>('info');
   const [isUpdating, setIsUpdating] = useState(false);
+  const { navigateTo } = useNavigation();
 
   const getStatusLabel = (status: string) => {
     switch (status) {
@@ -111,7 +113,10 @@ export function ExaminationDetailView({ examination, onExaminationUpdated }: Exa
             <div className="flex items-center space-x-4">
               <Button
                 variant="ghost"
-                onClick={() => window.history.back()}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  window.history.back();
+                }}
                 className="p-2"
               >
                 ← Retour
@@ -153,14 +158,31 @@ export function ExaminationDetailView({ examination, onExaminationUpdated }: Exa
               })()}
               
               <Button
-                onClick={() => window.open(`/examinations/${examination.id}/edit`, '_self')}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  navigateTo(`/examinations/${examination.id}/edit`);
+                }}
                 variant="outline"
               >
                 ✏️ Modifier
               </Button>
+
+              <Button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  window.open(`/examinations/${examination.id}/viewer`, '_blank');
+                }}
+                variant="outline"
+                className="bg-blue-600 hover:bg-blue-700 text-white"
+              >
+                🖼️ Viewer Intégré
+              </Button>
               
               <Button
-                onClick={() => window.open(`/reports/new?examinationId=${examination.id}`, '_blank')}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  window.open(`/reports/new?examinationId=${examination.id}`, '_blank');
+                }}
                 className="bg-green-600 hover:bg-green-700 text-white"
               >
                 📝 Créer rapport
@@ -443,7 +465,10 @@ export function ExaminationDetailView({ examination, onExaminationUpdated }: Exa
             <div className="flex items-center justify-between mb-6">
               <h3 className="text-lg font-semibold text-gray-900">Informations patient</h3>
               <Button
-                onClick={() => window.open(`/patients/${examination.patient.id}`, '_blank')}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  navigateTo(`/patients/${examination.patient.id}`);
+                }}
                 variant="outline"
               >
                 👁️ Voir le dossier complet
@@ -512,7 +537,10 @@ export function ExaminationDetailView({ examination, onExaminationUpdated }: Exa
             <div className="flex items-center justify-between mb-6">
               <h3 className="text-lg font-semibold text-gray-900">Rapports</h3>
               <Button
-                onClick={() => window.open(`/reports/new?examinationId=${examination.id}`, '_blank')}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  window.open(`/reports/new?examinationId=${examination.id}`, '_blank');
+                }}
                 className="bg-green-600 hover:bg-green-700 text-white"
               >
                 📝 Nouveau rapport
@@ -545,7 +573,10 @@ export function ExaminationDetailView({ examination, onExaminationUpdated }: Exa
                       <Button
                         variant="outline"
                         size="sm"
-                        onClick={() => window.open(`/reports/${report.id}`, '_blank')}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          navigateTo(`/reports/${report.id}`);
+                        }}
                       >
                         Voir
                       </Button>

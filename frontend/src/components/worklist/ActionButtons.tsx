@@ -3,7 +3,10 @@
 import { useState } from 'react';
 import { Examination } from '@/types';
 import { Button } from '@/components/ui/button';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { ViewerService } from '@/services/viewerService';
+import { useNavigation } from '@/hooks/useNavigation';
+import { Eye, Monitor, Layers, ChevronDown } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 interface ActionButtonsProps {
@@ -13,6 +16,7 @@ interface ActionButtonsProps {
 export function ActionButtons({ examination }: ActionButtonsProps) {
   const [showMenu, setShowMenu] = useState(false);
   const [isOpeningViewer, setIsOpeningViewer] = useState(false);
+  const { navigateTo } = useNavigation();
 
   const openViewer = async () => {
     const viewerStatus = ViewerService.getViewerStatus(examination);
@@ -33,6 +37,16 @@ export function ActionButtons({ examination }: ActionButtonsProps) {
     }
   };
 
+  const openIntegratedViewer = () => {
+    if (!examination.studyInstanceUID) {
+      toast.error('Aucune image DICOM disponible pour cet examen');
+      return;
+    }
+    
+    // Open integrated Cornerstone viewer
+    window.open(`/viewer/${examination.studyInstanceUID}`, '_blank');
+  };
+
   const openReport = () => {
     // Check if examination has existing reports
     const hasReports = examination.reports && examination.reports.length > 0;
@@ -42,7 +56,7 @@ export function ActionButtons({ examination }: ActionButtonsProps) {
       const latestReport = examination.reports[examination.reports.length - 1];
       // Use viewer for finalized reports, editor for drafts
       if (latestReport.status === 'FINAL' || latestReport.status === 'AMENDED') {
-        window.open(`/reports/${latestReport.id}`, '_blank');
+        navigateTo(`/reports/${latestReport.id}`);
       } else {
         window.open(`/reports/editor?examinationId=${examination.id}&reportId=${latestReport.id}`, '_blank');
       }
@@ -54,12 +68,12 @@ export function ActionButtons({ examination }: ActionButtonsProps) {
 
   const editExamination = () => {
     // Navigate to examination edit page
-    window.open(`/examinations/${examination.id}/edit`, '_blank');
+    navigateTo(`/examinations/${examination.id}/edit`);
   };
 
   return (
     <div className="flex items-center space-x-1">
-      {/* View Images */}
+      {/* View Images - Enhanced with dropdown */}
       {(() => {
         const viewerStatus = ViewerService.getViewerStatus(examination);
         
@@ -72,26 +86,54 @@ export function ActionButtons({ examination }: ActionButtonsProps) {
               disabled
               title={viewerStatus.reason || 'Visualiseur non disponible'}
             >
-              🖼️
+              <Eye className="h-3 w-3" />
             </Button>
           );
         }
         
         return (
-          <Button
-            variant="ghost"
-            size="sm"
-            className="h-6 w-6 p-0 text-blue-600 hover:text-blue-800"
-            onClick={openViewer}
-            disabled={isOpeningViewer}
-            title="Ouvrir le visualiseur DICOM"
-          >
-            {isOpeningViewer ? (
-              <div className="animate-spin w-3 h-3 border border-blue-500 border-t-transparent rounded-full" />
-            ) : (
-              '🖼️'
-            )}
-          </Button>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-6 w-6 p-0 text-blue-600 hover:text-blue-800"
+                disabled={isOpeningViewer}
+                title="Options de visualisation"
+              >
+                {isOpeningViewer ? (
+                  <div className="animate-spin w-3 h-3 border border-blue-500 border-t-transparent rounded-full" />
+                ) : (
+                  <Eye className="h-3 w-3" />
+                )}
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start" className="w-48">
+              <DropdownMenuItem onClick={(e) => {
+                e.stopPropagation();
+                openIntegratedViewer();
+              }}>
+                <Layers className="h-4 w-4 mr-2" />
+                Viewer Intégré
+                <span className="ml-auto text-xs text-blue-600">Nouveau</span>
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={(e) => {
+                e.stopPropagation();
+                openViewer();
+              }}>
+                <Monitor className="h-4 w-4 mr-2" />
+                OHIF Viewer
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={(e) => {
+                e.stopPropagation();
+                window.open(`http://localhost:8042/orthanc-explorer-2`, '_blank');
+              }}>
+                <Monitor className="h-4 w-4 mr-2" />
+                Orthanc Explorer
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         );
       })()}
 
@@ -100,7 +142,10 @@ export function ActionButtons({ examination }: ActionButtonsProps) {
         variant="ghost"
         size="sm"
         className="h-6 w-6 p-0 text-green-600 hover:text-green-800"
-        onClick={openReport}
+        onClick={(e) => {
+          e.stopPropagation();
+          openReport();
+        }}
         title={examination.reports?.length > 0 ? "Voir le rapport" : "Créer un rapport"}
       >
         📝
@@ -111,7 +156,10 @@ export function ActionButtons({ examination }: ActionButtonsProps) {
         variant="ghost"
         size="sm"
         className="h-6 w-6 p-0 text-orange-600 hover:text-orange-800"
-        onClick={editExamination}
+        onClick={(e) => {
+          e.stopPropagation();
+          editExamination();
+        }}
         title="Modifier l'examen"
       >
         ✏️
@@ -123,7 +171,10 @@ export function ActionButtons({ examination }: ActionButtonsProps) {
           variant="ghost"
           size="sm"
           className="h-6 w-6 p-0 text-gray-600 hover:text-gray-800"
-          onClick={() => setShowMenu(!showMenu)}
+          onClick={(e) => {
+            e.stopPropagation();
+            setShowMenu(!showMenu);
+          }}
           title="Plus d'actions"
         >
           ⋮

@@ -6,9 +6,9 @@ export default async function HomePage() {
   const session = await getServerSession(authOptions);
   
   if (!session) {
-    redirect('/auth/login');
+    redirect('/auth/test-login');
   }
   
   // Redirect to dashboard - main interface
-  redirect('/dashboard');
+  redirect('/dashboard-simple');
 }

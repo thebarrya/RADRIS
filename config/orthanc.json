@@ -3,23 +3,22 @@
   "DicomAet": "RADRIS",
   "DicomPort": 4242,
   "HttpPort": 8042,
-  
-  "PostgreSQL": {
-    "Host": "postgres",
-    "Port": 5432,
-    "Database": "orthanc",
-    "Username": "radris",
-    "Password": "radris123",
-    "EnableIndex": true,
-    "EnableStorage": false
-  },
 
   "Plugins": [
-    "/usr/share/orthanc/plugins/libOrthancPostgreSQLIndex.so",
     "/usr/share/orthanc/plugins/libOrthancGdcm.so",
+    "/usr/share/orthanc/plugins/libOrthancDicomWeb.so",
     "/usr/share/orthanc/plugins/libOrthancExplorer2.so",
-    "/usr/share/orthanc/plugins/libStoneWebViewer.so"
+    "/usr/share/orthanc/plugins-available/libStoneWebViewer.so",
+    "/usr/share/orthanc/plugins-available/libOrthancVolView.so"
   ],
+
+  "DicomWeb": {
+    "Enable": true,
+    "StudiesMetadata": "Full",
+    "SeriesMetadata": "Full",
+    "EnableMetadataCache": true,
+    "MetadataWorkerThreadsCount": 4
+  },
 
   "OrthancExplorer2": {
     "Enable": true,
@@ -34,14 +33,41 @@
         "PatientID", 
         "StudyDate",
         "StudyDescription",
-        "AccessionNumber"
-      ]
+        "AccessionNumber",
+        "Modality"
+      ],
+      "EnableDeleteResources": true,
+      "EnableDownloadZip": true,
+      "EnableDownloadDicomFile": true,
+      "EnableDownloadDicomDir": true,
+      "MaxStudiesDisplayed": 100,
+      "MaxSeriesDisplayed": 100
     },
     "Viewers": {
       "StoneWebViewer": {
         "Enable": true,
         "IsDefaultViewer": true
+      },
+      "VolView": {
+        "Enable": true
       }
+    }
+  },
+
+  "StoneWebViewer": {
+    "Enable": true,
+    "DateFormat": "DD/MM/YYYY",
+    "MaxConcurrentLoads": 6,
+    "ShowInfoPanel": true,
+    "ShowSeriesThumbnails": true,
+    "EnableOpenInOhifViewer3": true,
+    "StudyDownloadEnabled": false,
+    "SeriesDownloadEnabled": false,
+    "ShowUserPreferencesButton": true,
+    "UserPreferences": {
+      "ShowInfoPanel": true,
+      "ShowSeriesThumbnails": true,
+      "Language": "fr"
     }
   },
 
@@ -50,15 +76,19 @@
   "HttpCompressionEnabled": true,
   "HttpRequestTimeout": 60,
   
+  "ConcurrentJobs": 4,
   "StorageCompression": false,
 
   "HttpHeaders": {
     "Access-Control-Allow-Origin": "*",
-    "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
-    "Access-Control-Allow-Headers": "Content-Type, Authorization, Cache-Control, X-Requested-With, Accept, Origin",
+    "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS, HEAD",
+    "Access-Control-Allow-Headers": "Content-Type, Authorization, Cache-Control, X-Requested-With, Accept, Origin, DNT, User-Agent, If-Modified-Since, Keep-Alive, X-Requested-With, If-Modified-Since, X-File-Name, X-File-Size, X-Mime-Type, Range",
     "Access-Control-Allow-Credentials": "false",
-    "Access-Control-Max-Age": "86400"
+    "Access-Control-Max-Age": "86400",
+    "Access-Control-Expose-Headers": "Content-Length, Content-Type, Date, Server, Content-Range, Accept-Ranges"
   },
+
+
 
   "DicomServerEnabled": true,
   "DicomAlwaysAllowEcho": true,
@@ -70,19 +100,16 @@
   "RemoteAccessAllowed": true,
   "AuthenticationEnabled": false,
   "SslEnabled": false,
+  "CorsEnabled": true,
 
   "LimitFindResults": 0,
   "LimitFindInstances": 0,
   "MaximumStorageSize": 0,
   "MaximumPatientCount": 0,
-  "ConcurrentJobs": 4,
+
+  "LogLevel": "default",
+
 
   "StorageDirectory": "/var/lib/orthanc/db",
-  "IndexDirectory": "/var/lib/orthanc/db",
-
-  "StoneWebViewer": {
-    "Enable": true,
-    "DateFormat": "DD/MM/YYYY",
-    "MaxConcurrentLoads": 6
-  }
+  "IndexDirectory": "/var/lib/orthanc/db"
 }

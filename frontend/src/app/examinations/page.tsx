@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useSession } from 'next-auth/react';
 import { redirect } from 'next/navigation';
 import { AppLayout } from '@/components/layout/AppLayout';
@@ -9,21 +9,11 @@ import { ExaminationFilters } from '@/components/examinations/ExaminationFilters
 import { CreateExaminationModal } from '@/components/examinations/CreateExaminationModal';
 import { DicomSyncPanel } from '@/components/examinations/DicomSyncPanel';
 import { Button } from '@/components/ui/button';
-import { Examination } from '@/types';
-import { examinationsApi } from '@/lib/api';
+import { useExaminationsOptimized } from '@/hooks/useExaminationsOptimized';
+import { useRealTime } from '@/components/layout/RealTimeProvider';
 
 export default function ExaminationsPage() {
   const { data: session, status } = useSession();
-  const [examinations, setExaminations] = useState<Examination[]>([]);
-  const [pagination, setPagination] = useState({
-    page: 1,
-    limit: 25,
-    total: 0,
-    totalPages: 0,
-    hasMore: false,
-  });
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [filters, setFilters] = useState({
     status: '',
@@ -39,26 +29,24 @@ export default function ExaminationsPage() {
     sortOrder: 'desc' as 'asc' | 'desc',
   });
 
-  const fetchExaminations = async () => {
-    try {
-      setIsLoading(true);
-      setError(null);
-      
-      const response = await examinationsApi.getWorklist(filters);
-      setExaminations(response.data.examinations);
-      setPagination(response.data.pagination);
-    } catch (err: any) {
-      setError(err.response?.data?.error || 'Erreur lors du chargement des examens');
-    } finally {
-      setIsLoading(false);
-    }
-  };
+  // Use optimized examinations hook
+  const {
+    examinations,
+    pagination,
+    isLoading,
+    error,
+    refetch: fetchExaminations,
+    updateExamination,
+    addExamination,
+    removeExamination
+  } = useExaminationsOptimized({
+    filters,
+    enableBackgroundSync: true,
+    backgroundSyncInterval: 60000 // Background sync every minute
+  });
 
-  useEffect(() => {
-    if (session) {
-      fetchExaminations();
-    }
-  }, [session, filters]);
+  // Connect to real-time updates
+  const { subscribeToExamination, unsubscribeFromExamination } = useRealTime();
 
   // Redirect if not authenticated
   if (status === 'loading') {
@@ -93,8 +81,13 @@ export default function ExaminationsPage() {
     }));
   };
 
-  const handleExaminationCreated = () => {
-    fetchExaminations();
+  const handleExaminationCreated = (newExamination?: any) => {
+    if (newExamination) {
+      addExamination(newExamination);
+    } else {
+      // Fallback to refetch if examination data not provided
+      fetchExaminations();
+    }
     setShowCreateModal(false);
   };
 
@@ -147,7 +140,10 @@ export default function ExaminationsPage() {
           <div className="grid grid-cols-1 xl:grid-cols-4 gap-6 p-6">
             {/* DICOM Sync Panel */}
             <div className="xl:col-span-1">
-              <DicomSyncPanel onSyncComplete={fetchExaminations} />
+              <DicomSyncPanel onSyncComplete={() => {
+                // Use gentle background refresh after DICOM sync
+                setTimeout(() => fetchExaminations(), 1000);
+              }} />
             </div>
             
             {/* Examinations Table */}
@@ -156,7 +152,7 @@ export default function ExaminationsPage() {
                 <div className="flex items-center justify-center h-64">
                   <div className="text-center">
                     <div className="text-red-600 mb-2">⚠️ {error}</div>
-                    <Button onClick={fetchExaminations} variant="outline">
+                    <Button onClick={() => fetchExaminations()} variant="outline">
                       Réessayer
                     </Button>
                   </div>
@@ -172,7 +168,7 @@ export default function ExaminationsPage() {
                     sortBy: filters.sortBy,
                     sortOrder: filters.sortOrder,
                   }}
-                  onRefresh={fetchExaminations}
+                  onRefresh={() => fetchExaminations()}
                 />
               )}
             </div>

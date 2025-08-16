@@ -1,0 +1,107 @@
+{
+  "Name": "RADRIS PACS",
+  "DicomAet": "RADRIS",
+  "DicomPort": 4242,
+  "HttpPort": 8042,
+  
+  "PostgreSQL": {
+    "Host": "postgres",
+    "Port": 5432,
+    "Database": "orthanc",
+    "Username": "radris",
+    "Password": "radris123",
+    "EnableIndex": true,
+    "EnableStorage": true
+  },
+
+
+
+
+  "Plugins": [
+    "/usr/share/orthanc/plugins/libOrthancDicomWeb.so",
+    "/usr/share/orthanc/plugins/libOrthancExplorer2.so",
+    "/usr/share/orthanc/plugins/libStoneWebViewer.so",
+    "/usr/share/orthanc/plugins/libOrthancGdcm.so",
+    "/usr/share/orthanc/plugins/libOrthancPostgreSQLIndex.so"
+  ],
+
+  "OrthancExplorer2": {
+    "Enable": true,
+    "IsDefaultUI": true,
+    "Theme": "dark",
+    "LogLevel": "default",
+    "EnableShares": true,
+    "ShowOrthancName": true,
+    "UiOptions": {
+      "StudyListColumns": [
+        "PatientName",
+        "PatientID", 
+        "StudyDate",
+        "StudyDescription",
+        "AccessionNumber"
+      ]
+    },
+    "Viewers": {
+      "StoneWebViewer": {
+        "Enable": true,
+        "IsDefaultViewer": true
+      },
+      "VolView": {
+        "Enable": true
+      }
+    }
+  },
+
+  "HttpServerEnabled": true,
+  "HttpDescribeErrors": true,
+  "HttpCompressionEnabled": true,
+  "HttpRequestTimeout": 60,
+  
+  "ConcurrentJobs": 8,
+  "MaximumStorageSize": 107374182400,
+  "StorageCompression": true,
+
+  "HttpHeaders": {
+    "Access-Control-Allow-Origin": "*",
+    "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
+    "Access-Control-Allow-Headers": "Content-Type, Authorization, Cache-Control, X-Requested-With, Accept, Origin",
+    "Access-Control-Allow-Credentials": "false",
+    "Access-Control-Max-Age": "86400"
+  },
+
+  "DicomServerEnabled": true,
+  "DicomAlwaysAllowEcho": true,
+  "DicomAlwaysAllowFind": true,
+  "DicomAlwaysAllowMove": true,
+  "DicomAlwaysAllowGet": true,
+  "DicomAlwaysAllowStore": true,
+
+  "RemoteAccessAllowed": true,
+  "AuthenticationEnabled": false,
+  "SslEnabled": false,
+
+  "LimitFindResults": 0,
+  "LimitFindInstances": 0,
+  "MaximumStorageSize": 0,
+  "MaximumPatientCount": 0,
+
+  "LogLevel": "default",
+  "ConcurrentJobs": 4,
+
+  "StorageDirectory": "/var/lib/orthanc/db",
+  "IndexDirectory": "/var/lib/orthanc/db",
+
+  "StoneWebViewer": {
+    "Enable": true,
+    "DateFormat": "DD/MM/YYYY",
+    "MaxConcurrentLoads": 6
+  },
+
+  "DicomWeb": {
+    "Enable": true,
+    "StudiesMetadata": "Full",
+    "SeriesMetadata": "Full",
+    "EnableMetadataCache": true,
+    "MetadataWorkerThreadsCount": 4
+  }
+}

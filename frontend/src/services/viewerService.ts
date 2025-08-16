@@ -140,7 +140,7 @@ export class ViewerService {
     params.append('datasources', 'dicomweb');
     
     // Add the DICOMweb URL (required for OHIF to know where to fetch data)
-    params.append('url', config.wadoRsRoot || 'http://localhost:8042/dicom-web');
+    params.append('url', config.wadoRsRoot || 'http://localhost:8043/dicom-web');
     
     // Add patient context for better UX
     params.append('patientName', `${config.patient.lastName}, ${config.patient.firstName}`);
@@ -158,7 +158,7 @@ export class ViewerService {
     const params = new URLSearchParams();
     params.append('StudyInstanceUIDs', studyInstanceUID);
     params.append('datasources', 'dicomweb');
-    params.append('url', 'http://localhost:8042/dicom-web');
+    params.append('url', 'http://localhost:8043/dicom-web');
     
     return `${this.OHIF_BASE_URL}/viewer?${params.toString()}`;
   }

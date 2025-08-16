@@ -2,7 +2,8 @@
 
 import { useState, useEffect } from 'react';
 import { useSession } from 'next-auth/react';
-import { redirect, useParams, useRouter } from 'next/navigation';
+import { redirect, useParams } from 'next/navigation';
+import { useNavigation } from '@/hooks/useNavigation';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { EditPatientForm } from '@/components/patients/EditPatientForm';
 import { Button } from '@/components/ui/button';
@@ -12,7 +13,7 @@ import { patientsApi } from '@/lib/api';
 export default function EditPatientPage() {
   const { data: session, status } = useSession();
   const params = useParams();
-  const router = useRouter();
+  const { navigateTo } = useNavigation();
   const patientId = params.id as string;
   
   const [patient, setPatient] = useState<Patient | null>(null);
@@ -53,7 +54,7 @@ export default function EditPatientPage() {
   }
 
   const handlePatientUpdated = () => {
-    router.push(`/patients/${patientId}`);
+    navigateTo(`/patients/${patientId}`);
   };
 
   if (error) {
@@ -101,7 +102,7 @@ export default function EditPatientPage() {
       <EditPatientForm 
         patient={patient} 
         onPatientUpdated={handlePatientUpdated}
-        onCancel={() => router.push(`/patients/${patientId}`)}
+        onCancel={() => navigateTo(`/patients/${patientId}`)}
       />
     </AppLayout>
   );

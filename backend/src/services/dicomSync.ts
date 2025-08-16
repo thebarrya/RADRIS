@@ -286,6 +286,275 @@ export class DicomSyncService {
       return false;
     }
   }
+
+  // Auto-discovery functionality
+  async discoverNewStudies(): Promise<{
+    newStudiesFound: number;
+    matchedExaminations: number;
+    unmatchedStudies: DicomStudy[];
+    syncResults: SyncResult[];
+  }> {
+    try {
+      console.log('Starting auto-discovery of new DICOM studies...');
+      
+      // Get all studies from Orthanc
+      const allStudies = await dicomService.getAllStudies();
+      console.log(`Found ${allStudies.length} total studies in Orthanc`);
+      
+      // Get all examinations that already have StudyInstanceUID
+      const existingMappings = await this.prisma.examination.findMany({
+        where: {
+          studyInstanceUID: { not: null }
+        },
+        select: {
+          studyInstanceUID: true
+        }
+      });
+      
+      const existingStudyUIDs = new Set(
+        existingMappings.map(e => e.studyInstanceUID).filter(uid => uid !== null)
+      );
+      
+      // Find new studies (not yet mapped to examinations)
+      const newStudies = allStudies.filter(
+        study => !existingStudyUIDs.has(study.StudyInstanceUID)
+      );
+      
+      console.log(`Found ${newStudies.length} new studies to process`);
+      
+      const syncResults: SyncResult[] = [];
+      const unmatchedStudies: DicomStudy[] = [];
+      let matchedExaminations = 0;
+      
+      // Try to match each new study to existing examinations
+      for (const study of newStudies) {
+        console.log(`Processing new study: ${study.StudyInstanceUID}`);
+        
+        const matchResult = await this.matchStudyToExamination(study);
+        
+        if (matchResult.matched) {
+          console.log(`Matched study to examination: ${matchResult.examinationId}`);
+          
+          // Update the examination with the study
+          const syncResult = await this.linkStudyToExamination(
+            matchResult.examinationId!,
+            study.StudyInstanceUID
+          );
+          
+          syncResults.push(syncResult);
+          
+          if (syncResult.success) {
+            matchedExaminations++;
+          }
+        } else {
+          console.log(`Could not match study: ${study.StudyInstanceUID}`);
+          unmatchedStudies.push(study);
+        }
+      }
+      
+      console.log(`Auto-discovery complete: ${matchedExaminations} matched, ${unmatchedStudies.length} unmatched`);
+      
+      return {
+        newStudiesFound: newStudies.length,
+        matchedExaminations,
+        unmatchedStudies,
+        syncResults
+      };
+      
+    } catch (error) {
+      console.error('Error in auto-discovery:', error);
+      throw new Error(`Auto-discovery failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  private async matchStudyToExamination(study: DicomStudy): Promise<{
+    matched: boolean;
+    examinationId?: string;
+    matchMethod?: string;
+  }> {
+    try {
+      // Method 1: Match by accession number (most reliable)
+      if (study.AccessionNumber) {
+        const examination = await this.prisma.examination.findFirst({
+          where: {
+            accessionNumber: study.AccessionNumber,
+            studyInstanceUID: null // Only match unlinked examinations
+          },
+          select: { id: true }
+        });
+        
+        if (examination) {
+          return {
+            matched: true,
+            examinationId: examination.id,
+            matchMethod: 'accession_number'
+          };
+        }
+      }
+      
+      // Method 2: Match by patient ID and study date
+      if (study.PatientID && study.StudyDate) {
+        const studyDate = this.parseDicomDate(study.StudyDate);
+        
+        if (studyDate) {
+          const examination = await this.prisma.examination.findFirst({
+            where: {
+              patient: {
+                socialSecurity: study.PatientID
+              },
+              scheduledDate: {
+                gte: new Date(studyDate.getTime() - 24 * 60 * 60 * 1000), // 1 day before
+                lte: new Date(studyDate.getTime() + 24 * 60 * 60 * 1000)  // 1 day after
+              },
+              studyInstanceUID: null
+            },
+            select: { id: true }
+          });
+          
+          if (examination) {
+            return {
+              matched: true,
+              examinationId: examination.id,
+              matchMethod: 'patient_id_and_date'
+            };
+          }
+        }
+      }
+      
+      // Method 3: Match by patient name and study date (fuzzy matching)
+      if (study.PatientName && study.StudyDate) {
+        const studyDate = this.parseDicomDate(study.StudyDate);
+        const patientName = study.PatientName.replace(/\^/g, ' ').trim();
+        
+        if (studyDate && patientName) {
+          const examination = await this.prisma.examination.findFirst({
+            where: {
+              scheduledDate: {
+                gte: new Date(studyDate.getTime() - 24 * 60 * 60 * 1000),
+                lte: new Date(studyDate.getTime() + 24 * 60 * 60 * 1000)
+              },
+              studyInstanceUID: null,
+              patient: {
+                OR: [
+                  {
+                    firstName: {
+                      contains: patientName.split(' ')[0],
+                      mode: 'insensitive'
+                    }
+                  },
+                  {
+                    lastName: {
+                      contains: patientName.split(' ').slice(1).join(' '),
+                      mode: 'insensitive'
+                    }
+                  }
+                ]
+              }
+            },
+            select: { id: true }
+          });
+          
+          if (examination) {
+            return {
+              matched: true,
+              examinationId: examination.id,
+              matchMethod: 'patient_name_and_date'
+            };
+          }
+        }
+      }
+      
+      return { matched: false };
+      
+    } catch (error) {
+      console.error(`Error matching study ${study.StudyInstanceUID}:`, error);
+      return { matched: false };
+    }
+  }
+
+  private async linkStudyToExamination(examinationId: string, studyInstanceUID: string): Promise<SyncResult> {
+    try {
+      // Update examination with study information
+      await this.prisma.examination.update({
+        where: { id: examinationId },
+        data: {
+          studyInstanceUID,
+          imagesAvailable: true,
+          status: 'ACQUIRED', // Update status if it was SCHEDULED
+          updatedAt: new Date()
+        }
+      });
+      
+      return {
+        examinationId,
+        success: true,
+        studiesFound: 1,
+        studyInstanceUID,
+        imagesAvailable: true,
+        syncedAt: new Date()
+      };
+      
+    } catch (error) {
+      console.error(`Error linking study to examination ${examinationId}:`, error);
+      return {
+        examinationId,
+        success: false,
+        studiesFound: 0,
+        imagesAvailable: false,
+        error: error instanceof Error ? error.message : 'Unknown error',
+        syncedAt: new Date()
+      };
+    }
+  }
+
+  private parseDicomDate(dicomDate: string): Date | null {
+    try {
+      if (!dicomDate || dicomDate.length !== 8) return null;
+      
+      const year = parseInt(dicomDate.substring(0, 4));
+      const month = parseInt(dicomDate.substring(4, 6)) - 1; // Month is 0-indexed
+      const day = parseInt(dicomDate.substring(6, 8));
+      
+      return new Date(year, month, day);
+    } catch (error) {
+      return null;
+    }
+  }
+
+  // Scheduled auto-discovery (can be called periodically)
+  async runScheduledAutoDiscovery(): Promise<{
+    success: boolean;
+    discoveryResult?: any;
+    error?: string;
+    timestamp: string;
+  }> {
+    try {
+      console.log('Running scheduled auto-discovery...');
+      
+      const result = await this.discoverNewStudies();
+      
+      // Log the results
+      console.log(`Scheduled auto-discovery completed:`, {
+        newStudiesFound: result.newStudiesFound,
+        matchedExaminations: result.matchedExaminations,
+        unmatchedStudies: result.unmatchedStudies.length
+      });
+      
+      return {
+        success: true,
+        discoveryResult: result,
+        timestamp: new Date().toISOString()
+      };
+      
+    } catch (error) {
+      console.error('Scheduled auto-discovery failed:', error);
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Unknown error',
+        timestamp: new Date().toISOString()
+      };
+    }
+  }
 }
 
 // Singleton instance
